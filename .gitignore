@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Local servers / tooling
+node_modules/
+.cache/
+
+# Icon generation environment (script is source; keep the PNG output)
+__pycache__/
+
+_NoGit/
