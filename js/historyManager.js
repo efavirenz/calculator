@@ -21,13 +21,15 @@ export class HistoryManager {
 
   /**
    * Adds a new entry to the front of the list, trimming to the max size.
+   * @param {Array<object>} tokens - raw expression tokens (for exact restore)
    * @param {string} expression - display-friendly expression string
    * @param {string} result
    */
-  add(expression, result) {
+  add(tokens, expression, result) {
     const entry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       timestamp: Date.now(),
+      tokens: tokens.map((t) => ({ ...t })),
       expression,
       result,
     };

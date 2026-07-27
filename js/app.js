@@ -39,7 +39,7 @@ function main() {
     onChange: () => render(),
     onEvaluate: (tokens) => {
       const expressionText = tokensToPlainText(tokens);
-      history.add(expressionText, state.resultString);
+      history.add(tokens, expressionText, state.resultString);
       renderHistory(history.getAll(), handleHistorySelect);
     },
   });
@@ -47,13 +47,22 @@ function main() {
   function handleHistorySelect(id) {
     const entry = history.findById(id);
     if (!entry) return;
-    // Re-run the historical expression as a fresh calculation, per the
-    // most common calculator-history UX (tap to reuse, not just view).
-    state.clearAll();
-    for (const ch of entry.result) {
-      if (ch === '-') state.toggleSign();
-      else if (ch === '.') state.inputDecimal();
-      else state.inputDigit(ch);
+    // Restore the tapped entry exactly as it looked right after it was
+    // calculated: expression on the upper line, result on the lower
+    // line. From there, tapping the upper line or pressing Backspace
+    // resumes editing it (see recallExpressionToEntry / backspace()).
+    if (Array.isArray(entry.tokens) && entry.tokens.length > 0) {
+      state.loadFromHistory(entry.tokens, entry.result);
+    } else {
+      // Backward compatibility for history entries saved before tokens
+      // were persisted: fall back to re-entering the result as fresh
+      // input.
+      state.clearAll();
+      for (const ch of entry.result) {
+        if (ch === '-') state.toggleSign();
+        else if (ch === '.') state.inputDecimal();
+        else state.inputDigit(ch);
+      }
     }
     render();
     toggleHistoryPanel(false);
@@ -62,6 +71,15 @@ function main() {
   const keypadEl = document.getElementById('keypad');
   controller.attachKeypad(keypadEl);
   controller.attachKeyboard(window);
+
+  // Tapping the upper (expression) line moves it down into the
+  // editable lower line, leaving the upper line empty, so the user
+  // can resume editing the expression instead of starting fresh.
+  const upperDisplayEl = document.getElementById('upper-display');
+  upperDisplayEl.addEventListener('click', () => {
+    state.recallExpressionToEntry();
+    render();
+  });
 
   // Button press flash feedback (delegated).
   keypadEl.addEventListener('calc-pressed', (event) => {

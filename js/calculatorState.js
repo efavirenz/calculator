@@ -332,6 +332,33 @@ export class CalculatorState {
   }
 
   /**
+   * Moves the frozen upper-line expression down into the editable
+   * lower line without deleting anything (used when the user taps the
+   * upper display line directly to resume editing it). No-op unless
+   * currently showing a result (State B).
+   */
+  recallExpressionToEntry() {
+    if (this.displayState !== DisplayState.RESULT) return;
+    this.displayState = DisplayState.ENTRY;
+    this.resultString = null;
+  }
+
+  /**
+   * Restores a full expression + result pair (e.g. from a tapped
+   * History entry) and displays it as a finished calculation (State
+   * B), exactly as if '=' had just been pressed.
+   * @param {Array<object>} tokens - expression tokens to restore
+   * @param {string} result - formatted result string
+   */
+  loadFromHistory(tokens, result) {
+    this.tokens = tokens.map((t) => ({ ...t }));
+    this.resultString = result;
+    this.displayState = DisplayState.RESULT;
+    this.exponentMode = false;
+    this.errorMessage = null;
+  }
+
+  /**
    * =: evaluates the current expression. Auto-closes any unclosed
    * parentheses before evaluating (documented ambiguity resolution;
    * see README).

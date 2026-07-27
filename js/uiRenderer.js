@@ -6,6 +6,8 @@
  * turns it into DOM updates. It never mutates calculator state itself.
  */
 
+import { addThousandsSeparators, formatExpressionWithCommas } from './formatUtils.js';
+
 const SELECTORS = {
   upperDisplay: '#upper-display',
   lowerDisplay: '#lower-display',
@@ -44,6 +46,25 @@ function renderTokensToFragment(tokens) {
       }
       sup.textContent = text;
       fragment.appendChild(sup);
+      continue;
+    }
+
+    if (token.kind === 'digit' || token.kind === 'decimal') {
+      // Group a contiguous run of digit/decimal tokens (a single
+      // number) so thousands separators can be inserted for values
+      // of 1000 and above.
+      let numStr = '';
+      while (
+        i < tokens.length &&
+        !tokens[i].hidden &&
+        !tokens[i].isExponent &&
+        (tokens[i].kind === 'digit' || tokens[i].kind === 'decimal')
+      ) {
+        numStr += tokens[i].char;
+        i += 1;
+      }
+      const textNode = document.createTextNode(addThousandsSeparators(numStr));
+      fragment.appendChild(textNode);
       continue;
     }
 
@@ -86,7 +107,7 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
 
   if (displayState === 'B') {
     upperEl.appendChild(renderTokensToFragment(tokens));
-    lowerEl.textContent = resultString !== null ? resultString : '';
+    lowerEl.textContent = resultString !== null ? addThousandsSeparators(resultString) : '';
   } else {
     // State A: upper stays empty; lower shows the live expression.
     lowerEl.appendChild(renderTokensToFragment(tokens.length ? tokens : [{ char: '0', kind: 'digit', isExponent: false, hidden: false }]));
@@ -145,11 +166,11 @@ export function renderHistory(entries, onSelect) {
 
     const exprEl = document.createElement('div');
     exprEl.className = 'history-expression';
-    exprEl.textContent = entry.expression;
+    exprEl.textContent = formatExpressionWithCommas(entry.expression);
 
     const resultEl = document.createElement('div');
     resultEl.className = 'history-result';
-    resultEl.textContent = `= ${entry.result}`;
+    resultEl.textContent = `= ${addThousandsSeparators(entry.result)}`;
 
     const timeEl = document.createElement('div');
     timeEl.className = 'history-timestamp';

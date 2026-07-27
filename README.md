@@ -3,6 +3,7 @@
 An iPhone-style calculator built as a installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
+![version](https://img.shields.io/badge/version-v2-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -322,6 +323,70 @@ Per the "most iOS-like behavior, document the decision" rule:
    exponent mode and starts a new normal-size term (same rule as pressing an
    operator).
 
-## 15. License
+## 15. Version History
+
+### v2 — 2026-07-27
+
+#### ✨ New Features
+
+- **Thousands separators** — All numbers ≥ 1,000 are now displayed with commas
+  (e.g. `1,234,567.89`). Formatting is applied in three places:
+  - The live expression on the lower display (token-by-token, digit runs are
+    grouped before rendering).
+  - The result on the lower display (State B).
+  - History entries — both the expression and the result lines.
+  Exponential-notation values are left untouched. Two new helpers
+  (`addThousandsSeparators`, `formatExpressionWithCommas`) were added to
+  `formatUtils.js`.
+
+- **Faithful history restore** — Tapping a history entry now loads the full
+  expression *and* result exactly as they appeared right after `=` was pressed
+  (State B: expression on the upper line, result on the lower line). Previously
+  only the result string was re-entered digit-by-digit, losing the expression.
+  - `HistoryManager.add()` now stores the raw token array alongside the
+    expression string (`tokens` field in each history entry).
+  - `CalculatorState.loadFromHistory(tokens, result)` restores both fields
+    atomically into State B.
+  - Backward-compatible: entries saved before v2 (no `tokens` field) fall back
+    to the old digit-replay behaviour.
+
+- **Tap upper display to resume editing** — In State B (result shown), clicking
+  the upper display line moves the frozen expression back to the editable lower
+  line without clearing it, letting the user continue editing the expression
+  instead of starting fresh. Implemented via
+  `CalculatorState.recallExpressionToEntry()` and a `click` listener on
+  `#upper-display` wired in `app.js`.
+
+#### 🎨 UI / CSS Improvements
+
+- **Version badge** — A `v2` pill badge is shown in the top-right corner of the
+  topbar, grouped with the Install button inside a new `.topbar-actions`
+  flex container.
+- **Keypad now fills available space** — The keypad uses `flex: 1 1 auto` with
+  `grid-template-rows: repeat(6, 1fr)` and `min-height: 0`, removing the
+  old fixed `aspect-ratio` / `max-height: 62vh` constraints so the layout
+  adapts cleanly to all viewport sizes.
+- **Upper display is independently scalable** — `.display-upper` and
+  `.display-lower` each now carry their own `--display-max-font` /
+  `--display-min-font` custom properties (34 px / 18 px for the upper line;
+  64 px / 26 px for the lower line), giving finer control over the two-line
+  expression display.
+- **Tap cursor on upper display** — `.display-upper` gains `cursor: pointer`
+  to hint that the line is interactive.
+- **Wide `0` button centred** — `.btn-wide` now uses `justify-content: center`
+  (previously left-aligned with an asymmetric `padding-left`).
+- **Responsive short-viewport media query** — The `@media (max-height: 640px)`
+  block now also reduces `.display-upper` font sizes (28 px / 16 px) in
+  addition to the existing lower-display override.
+
+#### ⚙️ Internal / Infrastructure
+
+- **Service worker cache bumped to `v2`** — `CACHE_VERSION` in
+  `service-worker.js` is updated from `v1` to `v2` so returning visitors
+  receive the new assets instead of stale cached files.
+
+---
+
+## 16. License
 
 MIT — see [LICENSE](./LICENSE).
