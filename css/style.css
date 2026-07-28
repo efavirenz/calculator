@@ -135,12 +135,12 @@ button {
 /* ---------------------------------- Display ---------------------------------- */
 
 .display {
-  flex: 0 1 auto;
+  flex: 0 0 130px;
+  height: 130px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   padding: 0 24px 12px;
-  min-height: 0;
 }
 
 .display-line {
@@ -206,8 +206,8 @@ button {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  transition: transform 0.08s ease, filter 0.12s ease;
-  will-change: transform;
+  transition: opacity 0.3s ease-out, transform 0.15s ease-out;
+  will-change: opacity, transform;
 }
 
 .btn sup {
@@ -217,8 +217,9 @@ button {
 
 .btn:active,
 .btn.is-active {
+  opacity: 0.5;
   transform: scale(0.96);
-  filter: brightness(1.15);
+  transition: opacity 0.04s ease-in, transform 0.04s ease-in;
 }
 
 .btn:focus-visible {
@@ -398,7 +399,31 @@ button {
 .confirm-actions {
   display: flex;
   justify-content: center;
-  gap: 24px;
+  gap: 12px;
+}
+
+.confirm-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.confirm-btn:active {
+  transform: scale(0.96);
+}
+
+.confirm-btn-cancel {
+  background: #ffffff;
+  color: #000000;
+}
+
+.confirm-btn-clear {
+  background: var(--color-danger);
+  color: #ffffff;
 }
 
 /* ---------------------------------- Reduced motion ---------------------------------- */
@@ -415,6 +440,11 @@ button {
 /* ---------------------------------- Small screens ---------------------------------- */
 
 @media (max-height: 640px) {
+  .display {
+    flex: 0 0 96px;
+    height: 96px;
+  }
+
   .display-lower {
     --display-max-font: 48px;
     --display-min-font: 22px;

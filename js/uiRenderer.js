@@ -93,13 +93,18 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
   const upperEl = document.querySelector(SELECTORS.upperDisplay);
   const lowerEl = document.querySelector(SELECTORS.lowerDisplay);
 
-  upperEl.innerHTML = '';
-  lowerEl.innerHTML = '';
+  upperEl.textContent = '';
+  upperEl.style.fontSize = '';
+
+  lowerEl.textContent = '';
+  lowerEl.style.fontSize = '';
 
   if (errorMessage) {
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = 'Error';
     lowerEl.classList.add('is-error');
+    autoShrinkToFit(lowerEl);
+    autoShrinkToFit(upperEl);
     return;
   }
 
@@ -217,7 +222,7 @@ export function toggleHistoryPanel(open) {
 export function flashButton(buttonEl) {
   if (!buttonEl) return;
   buttonEl.classList.add('is-active');
-  window.setTimeout(() => buttonEl.classList.remove('is-active'), 120);
+  window.setTimeout(() => buttonEl.classList.remove('is-active'), 150);
 }
 
 export { SELECTORS };

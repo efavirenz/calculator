@@ -109,6 +109,7 @@ function main() {
     history.clear();
     renderHistory(history.getAll(), handleHistorySelect);
     confirmDialog.close ? confirmDialog.close() : confirmDialog.removeAttribute('open');
+    toggleHistoryPanel(false);
   });
   confirmNoBtn.addEventListener('click', () => {
     confirmDialog.close ? confirmDialog.close() : confirmDialog.removeAttribute('open');
