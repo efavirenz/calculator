@@ -3,7 +3,7 @@
 An iPhone-style calculator built as a installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v2-blue)
+![version](https://img.shields.io/badge/version-v3-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -324,6 +324,16 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v3 — 2026-07-28
+
+#### 🐛 Bug Fixes & UX Enhancements
+
+- **Thorough display line reset** — Explicitly clear `textContent` and reset inline `font-size` on both upper and lower display elements on every render cycle, ensuring the upper display line is completely hidden after pressing `AC` or operators (`+`, `-`, `×`, `÷`) from State B.
+- **Redesigned history clear confirmation dialog** — Styled modal buttons with rounded corners (`border-radius: 10px`): `Cancel` button features a clean white background with black text, while `Clear` features a solid red background (`#FF453A`) with white text.
+- **Auto-close history panel on clear** — Confirming history deletion now automatically closes the side history panel and returns to the main calculator view.
+- **Keypad button press tap/fade effect** — Button press animation now features a quick opacity fade (`0.04s ease-in`) on touch followed by a smooth transition back (`0.3s ease-out`) to normal state.
+- **Fixed display height for button size stability** — Locked the `.display` container height (`flex: 0 0 130px; height: 130px`) so shrinking lower-display font size when entering long numbers no longer alters container height or resizes keypad buttons.
 
 ### v2 — 2026-07-27
 
