@@ -233,6 +233,7 @@ export function evaluateRPN(rpn) {
         stack.push(a / b);
         break;
       case '^':
+        if (a === 0 && b < 0) throw new ExpressionError('Division by zero');
         stack.push(Math.pow(a, b));
         break;
       default:

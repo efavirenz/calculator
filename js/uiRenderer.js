@@ -68,17 +68,12 @@ function renderTokensToFragment(tokens) {
       continue;
     }
 
-    const textNode = document.createTextNode(displayChar(token.char));
+    const textNode = document.createTextNode(token.char);
     fragment.appendChild(textNode);
     i += 1;
   }
 
   return fragment;
-}
-
-/** Maps internal operator characters to their display glyphs. */
-function displayChar(char) {
-  return char;
 }
 
 /**
@@ -102,7 +97,7 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
   if (errorMessage) {
     upperEl.style.display = '';
     upperEl.appendChild(renderTokensToFragment(tokens));
-    lowerEl.textContent = 'Error';
+    lowerEl.textContent = errorMessage;
     lowerEl.classList.add('is-error');
     autoShrinkToFit(lowerEl);
     autoShrinkToFit(upperEl);
@@ -129,15 +124,16 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
 
 /** Shrinks font-size on the display line if the content overflows its box. */
 function autoShrinkToFit(el) {
-  const isUpper = el.id === 'upper-display';
+  const upperEl = document.querySelector(SELECTORS.upperDisplay);
+  const isUpper = el === upperEl;
   const maxFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-max-font')) || (isUpper ? 34 : 64);
   const minFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-min-font')) || (isUpper ? 18 : 26);
   el.style.fontSize = `${maxFontPx}px`;
 
-  let currentSize = maxFontPx;
-  while (el.scrollWidth > el.clientWidth && currentSize > minFontPx) {
-    currentSize -= 1;
-    el.style.fontSize = `${currentSize}px`;
+  if (el.scrollWidth > el.clientWidth) {
+    const ratio = el.clientWidth / el.scrollWidth;
+    const targetSize = Math.max(minFontPx, Math.floor(maxFontPx * ratio));
+    el.style.fontSize = `${targetSize}px`;
   }
 }
 
@@ -159,7 +155,7 @@ export function setCloseParenEnabled(enabled) {
  */
 export function renderHistory(entries, onSelect) {
   const listEl = document.querySelector(SELECTORS.historyList);
-  listEl.innerHTML = '';
+  listEl.replaceChildren();
 
   if (entries.length === 0) {
     const empty = document.createElement('li');
@@ -232,3 +228,4 @@ export function flashButton(buttonEl) {
 }
 
 export { SELECTORS };
+

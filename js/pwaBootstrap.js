@@ -44,6 +44,7 @@ export function setupInstallPrompt(installButtonEl) {
   });
 
   window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
     installButtonEl.hidden = true;
   });
 }

@@ -164,8 +164,14 @@ export class CalculatorState {
   _leadingDigitLimitReached() {
     let i = this.tokens.length - 1;
     let digitCount = 0;
+    let sawDecimal = false;
     while (i >= 0 && (this.tokens[i].kind === 'digit' || this.tokens[i].kind === 'decimal')) {
-      if (this.tokens[i].kind === 'digit') digitCount += 1;
+      if (this.tokens[i].kind === 'decimal') {
+        sawDecimal = true;
+        digitCount = 0; // reset, digits after decimal don't count towards pre-decimal limit
+      } else if (!sawDecimal) {
+        digitCount += 1;
+      }
       i -= 1;
     }
     return digitCount >= MAX_DIGITS_BEFORE_DECIMAL;
@@ -421,16 +427,21 @@ export class CalculatorState {
 
   /** Rebuilds a plain token array from a formatted result string. */
   _tokensFromString(str) {
+    if (!str) return [];
+    let formattedStr = str;
+    if (str.includes('e') || str.includes('E')) {
+      const num = Number(str);
+      if (Number.isFinite(num)) {
+        // Expand scientific notation into standard decimal string
+        formattedStr = num.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 12 });
+      }
+    }
+
     const tokens = [];
-    for (const ch of str) {
+    for (const ch of formattedStr) {
       if (ch === '-') tokens.push(makeToken('-', 'operator'));
       else if (ch === '.') tokens.push(makeToken('.', 'decimal'));
-      else if (ch === 'e' || ch === '+') {
-        // Exponential notation from formatNumber isn't re-editable;
-        // fall back to treating it as opaque digits is unsafe, so we
-        // just stop including further characters. Rare edge case.
-        break;
-      } else tokens.push(makeToken(ch, 'digit'));
+      else if (ch >= '0' && ch <= '9') tokens.push(makeToken(ch, 'digit'));
     }
     return tokens;
   }

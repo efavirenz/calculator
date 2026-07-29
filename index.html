@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
   <title>Calculator</title>
   <meta name="description" content="An iPhone-style calculator, installable as a Progressive Web App." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
 
   <!-- PWA manifest (relative path: works on GitHub Pages subpaths) -->
   <link rel="manifest" href="./manifest.json" />
@@ -40,7 +41,7 @@
       </button>
       <div class="topbar-actions">
         <button id="install-btn" class="install-button" type="button" hidden>Install</button>
-        <span class="version-badge" aria-hidden="true">v6</span>
+        <span class="version-badge" aria-hidden="true">v6.1</span>
       </div>
     </header>
 
@@ -94,7 +95,7 @@
   </div>
 
   <!-- History side panel -->
-  <div id="history-overlay" class="history-overlay"></div>
+  <div id="history-overlay" class="history-overlay" aria-hidden="true"></div>
   <aside id="history-panel" class="history-panel" aria-hidden="true" aria-label="Calculation history">
     <div class="history-header">
       <h2>History</h2>

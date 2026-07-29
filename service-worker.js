@@ -10,7 +10,7 @@
  * caches, so returning users won't get stuck on stale assets.
  */
 
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v6.1';
 const CACHE_NAME = `calculator-cache-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200) {
+          if (response && response.status === 200 && response.type === 'basic') {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }

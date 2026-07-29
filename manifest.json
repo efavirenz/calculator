@@ -2,6 +2,8 @@
   "name": "Calculator",
   "short_name": "Calculator",
   "description": "An iPhone-style calculator, installable as a Progressive Web App.",
+  "lang": "en",
+  "categories": ["utilities"],
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

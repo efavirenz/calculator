@@ -17,7 +17,14 @@ export function loadHistory() {
     const raw = window.localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (entry) =>
+        entry &&
+        typeof entry === 'object' &&
+        typeof entry.expression === 'string' &&
+        typeof entry.result === 'string'
+    );
   } catch (err) {
     console.warn('Failed to load history from storage:', err);
     return [];

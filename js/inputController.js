@@ -31,8 +31,8 @@ export class InputController {
   /**
    * @param {object} params
    * @param {import('./calculatorState.js').CalculatorState} params.state
-   * @param {() => void} params.onChange - called after every mutating action
-   * @param {(expression:string, result:string) => void} params.onEvaluate - called on successful '='
+   * @param {(action?: string) => void} params.onChange - called after every mutating action
+   * @param {(tokens: Array<object>, result: string, before: string) => void} params.onEvaluate - called on successful '='
    */
   constructor({ state, onChange, onEvaluate }) {
     this.state = state;
@@ -129,10 +129,16 @@ export class InputController {
   /** Attaches the global keyboard listener. */
   attachKeyboard(target = window) {
     target.addEventListener('keydown', (event) => {
-      // Ignore keystrokes while focus is inside a text input/dialog control.
-      if (event.target && event.target.closest && event.target.closest('input, textarea')) {
+      // Ignore keystrokes while focus is inside a text input/dialog control, or when modal is open.
+      if (event.target && event.target.closest && event.target.closest('input, textarea, dialog')) {
         return;
       }
+
+      const confirmDialog = document.getElementById('confirm-dialog');
+      if (confirmDialog && confirmDialog.open) return;
+
+      const historyPanel = document.getElementById('history-panel');
+      if (historyPanel && historyPanel.classList.contains('is-open')) return;
 
       const mapped = KEY_TO_ACTION[event.key];
       if (!mapped) return;

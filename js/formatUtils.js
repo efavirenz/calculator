@@ -72,5 +72,5 @@ export function addThousandsSeparators(numStr) {
  */
 export function formatExpressionWithCommas(text) {
   if (typeof text !== 'string') return text;
-  return text.replace(/\d+(?:\.\d+)?/g, (match) => addThousandsSeparators(match));
+  return text.replace(/-?\d+(?:\.\d+)?/g, (match) => addThousandsSeparators(match));
 }

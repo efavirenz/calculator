@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6-blue)
+![version](https://img.shields.io/badge/version-v6.1-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -323,6 +323,17 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v6.1 — 2026-07-29
+
+#### 🛡️ Comprehensive Code Audit & Remediation
+
+- **Performance Reflow Fix** — Replaced `while` loop font auto-scaling in `autoShrinkToFit` with a single-step ratio calculation, eliminating up to ~38 forced layout reflows per keystroke.
+- **Custom Error Message Display** — `uiRenderer.js` now renders specific diagnostic error messages (e.g. `Division by zero`) instead of hiding them behind a generic `"Error"` text.
+- **Security & XSS Hardening** — Added `<meta http-equiv="Content-Security-Policy">` header and replaced `innerHTML = ''` DOM clears with `replaceChildren()`.
+- **LocalStorage Data Validation** — `loadHistory()` now filters and validates stored entry shapes to prevent crashes from corrupted entries.
+- **Mathematical Edge Cases** — `0^(-1)` reciprocal power evaluated as `Division by zero` error. Corrected `_tokensFromString` scientific notation expansion.
+- **Automated Unit Test Suite** — Added 11 automated unit tests (`tests/parser.test.js`, `tests/state.test.js`) using Node.js native test runner.
 
 ### v6 — 2026-07-29
 
