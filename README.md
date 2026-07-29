@@ -1,6 +1,6 @@
 # Calculator
 
-An iPhone-style calculator built as a installable, offline-capable Progressive
+An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
 ![version](https://img.shields.io/badge/version-v4-blue)
@@ -199,7 +199,7 @@ result.
 Key: `calculator.history.v1` → JSON array of:
 
 ```json
-{ "id": "...", "timestamp": 1690000000000, "expression": "1+2³", "result": "9" }
+{ "id": "...", "timestamp": 1690000000000, "tokens": [...], "expression": "1+2³", "result": "9" }
 ```
 
 - Newest entries are unshifted to the front; the array is trimmed to 50
@@ -217,7 +217,7 @@ Key: `calculator.history.v1` → JSON array of:
   support. The service worker precaches the full app shell (HTML, CSS, JS,
   icons) on `install`, using a **cache-first** strategy with a network
   fallback for anything else same-origin.
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v1`. The `activate`
+- **Versioned cache**: `CACHE_NAME = calculator-cache-v4`. The `activate`
   handler deletes any cache whose name starts with `calculator-cache-` and
   doesn't match the current version. **Release process:** bump
   `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
@@ -293,8 +293,7 @@ Then visit `http://localhost:<port>/`.
 - [ ] Decimal math and malformed-decimal guard (`.` cannot be entered twice)
 - [ ] Consecutive calculations (operator after `=` continues from result)
 - [ ] AC fully resets state
-- [ ] Backspace: State A deletes a character; State B moves the expression
-      back down and clears the result first
+- [ ] Backspace: State A deletes trailing token; State B deletes trailing digit of result and clears upper display
 - [ ] History persists across reloads, caps at 50, newest first
 - [ ] Clear History requires confirmation
 - [ ] App works offline after first load (airplane mode test)
