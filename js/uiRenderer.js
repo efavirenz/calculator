@@ -227,5 +227,18 @@ export function flashButton(buttonEl) {
   window.setTimeout(() => buttonEl.classList.remove('is-active'), 150);
 }
 
+let toastTimeout = null;
+
+/** Shows temporary 'Copied' floating notification toast. */
+export function showCopyToast() {
+  const toast = document.getElementById('copy-toast');
+  if (!toast) return;
+  toast.classList.add('is-visible');
+  if (toastTimeout) window.clearTimeout(toastTimeout);
+  toastTimeout = window.setTimeout(() => {
+    toast.classList.remove('is-visible');
+  }, 1500);
+}
+
 export { SELECTORS };
 

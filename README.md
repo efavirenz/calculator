@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.1-blue)
+![version](https://img.shields.io/badge/version-v6.2-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -334,6 +334,14 @@ Per the "most iOS-like behavior, document the decision" rule:
 - **LocalStorage Data Validation** — `loadHistory()` now filters and validates stored entry shapes to prevent crashes from corrupted entries.
 - **Mathematical Edge Cases** — `0^(-1)` reciprocal power evaluated as `Division by zero` error. Corrected `_tokensFromString` scientific notation expansion.
 - **Automated Unit Test Suite** — Added 11 automated unit tests (`tests/parser.test.js`, `tests/state.test.js`) using Node.js native test runner.
+
+### v6.2 — 2026-07-29
+
+#### 📱 iOS Safari UI Lock, Rapid Tap Fix & Copy to Clipboard
+
+- **iOS Safari UI Lock & Overscroll Prevention** — Locked container overscroll bounce using `overscroll-behavior: none`, `position: fixed` layout rules, `touch-action: manipulation`, and non-scrollable `touchmove` prevention, preventing the UI/keypad from bouncing up/shifting during swipes or rapid taps.
+- **Immediate Touch Response & Rapid Tap Fix** — Switched keypad event handling to `pointerdown` with `preventDefault()`, eliminating iOS 300ms touch delay and preventing dropped inputs during rapid button pressing.
+- **Tap Lower Display to Copy + Toast** — Tapping the lower display line copies the displayed text/result to the system clipboard and triggers a smooth floating `Copied` notification toast.
 
 ### v6 — 2026-07-29
 

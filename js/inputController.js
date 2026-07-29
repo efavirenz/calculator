@@ -105,11 +105,40 @@ export class InputController {
   }
 
   /**
-   * Attaches a single delegated click listener to the keypad container.
+   * Attaches delegated touch/pointer listeners to the keypad container.
    * @param {HTMLElement} keypadEl
    */
   attachKeypad(keypadEl) {
+    let lastPointerType = null;
+
+    keypadEl.addEventListener('pointerdown', (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      lastPointerType = event.pointerType;
+
+      const button = event.target.closest('button[data-action]');
+      if (!button || button.disabled) return;
+
+      // Prevent default stops double tap zoom, scroll gestures on keypad, and delayed synthetic click
+      event.preventDefault();
+
+      const action = button.dataset.action;
+      const value = button.dataset.value;
+
+      if (action === 'digit') {
+        this.dispatch('digit', value);
+      } else {
+        this.dispatch(action);
+      }
+
+      button.dispatchEvent(new CustomEvent('calc-pressed', { bubbles: true }));
+    });
+
+    // Fallback for accessibility/keyboard synthetic clicks when pointerdown was not triggered
     keypadEl.addEventListener('click', (event) => {
+      if (lastPointerType) {
+        // Already handled via pointerdown
+        return;
+      }
       const button = event.target.closest('button[data-action]');
       if (!button || button.disabled) return;
 

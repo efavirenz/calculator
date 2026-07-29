@@ -39,14 +39,19 @@
 html, body {
   height: 100%;
   margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  position: fixed;
+  width: 100%;
 }
 
 body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-display);
-  overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 button {
@@ -61,6 +66,8 @@ button {
   padding-bottom: var(--safe-bottom);
   padding-left: var(--safe-left);
   padding-right: var(--safe-right);
+  touch-action: manipulation;
+  overscroll-behavior: none;
 }
 
 /* ---------------------------------- Topbar ---------------------------------- */
@@ -168,6 +175,7 @@ button {
   color: var(--color-text);
   font-size: var(--display-max-font);
   font-weight: 300;
+  cursor: pointer;
 }
 
 .display-lower.is-error {
@@ -206,7 +214,8 @@ button {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  transition: opacity 0.3s ease-out, transform 0.15s ease-out;
+  touch-action: manipulation;
+  transition: opacity 0.1s ease-out, transform 0.08s ease-out;
   will-change: opacity, transform;
 }
 
@@ -454,4 +463,32 @@ button {
     --display-max-font: 28px;
     --display-min-font: 16px;
   }
+}
+
+/* ---------------------------------- Copy toast ---------------------------------- */
+
+.copy-toast {
+  position: fixed;
+  top: calc(var(--safe-top) + 54px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: rgba(44, 44, 46, 0.92);
+  color: var(--color-text);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 100;
+}
+
+.copy-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }

@@ -17,12 +17,25 @@ import {
   renderHistory,
   toggleHistoryPanel,
   flashButton,
+  showCopyToast,
 } from './uiRenderer.js';
 import { registerServiceWorker, setupInstallPrompt } from './pwaBootstrap.js';
 
 function main() {
   const state = new CalculatorState();
   const history = new HistoryManager();
+
+  // Prevent iOS Safari overscroll rubber-banding except on scrollable elements (history list)
+  document.addEventListener(
+    'touchmove',
+    (event) => {
+      if (event.target.closest('.history-list')) {
+        return;
+      }
+      event.preventDefault();
+    },
+    { passive: false }
+  );
 
   function render() {
     renderDisplay({
@@ -47,16 +60,9 @@ function main() {
   function handleHistorySelect(id) {
     const entry = history.findById(id);
     if (!entry) return;
-    // Restore the tapped entry exactly as it looked right after it was
-    // calculated: expression on the upper line, result on the lower
-    // line. From there, tapping the upper line or pressing Backspace
-    // resumes editing it (see recallExpressionToEntry / backspace()).
     if (Array.isArray(entry.tokens) && entry.tokens.length > 0) {
       state.loadFromHistory(entry.tokens, entry.result);
     } else {
-      // Backward compatibility for history entries saved before tokens
-      // were persisted: fall back to re-entering the result as fresh
-      // input.
       state.clearAll();
       for (const ch of entry.result) {
         if (ch === '-') state.toggleSign();
@@ -72,13 +78,47 @@ function main() {
   controller.attachKeypad(keypadEl);
   controller.attachKeyboard(window);
 
-  // Tapping the upper (expression) line moves it down into the
-  // editable lower line, leaving the upper line empty, so the user
-  // can resume editing the expression instead of starting fresh.
   const upperDisplayEl = document.getElementById('upper-display');
   upperDisplayEl.addEventListener('click', () => {
     state.recallExpressionToEntry();
     render();
+  });
+
+  // Tap lower display to copy current displayed text to iOS/browser clipboard
+  const lowerDisplayEl = document.getElementById('lower-display');
+  lowerDisplayEl.addEventListener('click', async () => {
+    const textToCopy = lowerDisplayEl.textContent ? lowerDisplayEl.textContent.trim() : '';
+    if (!textToCopy) return;
+
+    let success = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+        success = true;
+      }
+    } catch {
+      // Fallback for context without permissions
+    }
+
+    if (!success) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        success = false;
+      }
+    }
+
+    if (success) {
+      showCopyToast();
+    }
   });
 
   // Button press flash feedback (delegated).
