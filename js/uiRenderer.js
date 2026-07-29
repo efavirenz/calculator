@@ -100,6 +100,7 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
   lowerEl.style.fontSize = '';
 
   if (errorMessage) {
+    upperEl.style.display = '';
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = 'Error';
     lowerEl.classList.add('is-error');

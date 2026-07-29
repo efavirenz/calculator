@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v4-blue)
+![version](https://img.shields.io/badge/version-v5-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -323,6 +323,14 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v5 — 2026-07-29
+
+#### 🛠️ Error Recovery & Display Fix
+
+- **Visible Upper Display on Error** — Ensure `upperEl.style.display = ''` when `errorMessage` is set so invalid expressions (e.g. `61+`) are displayed on the upper line while lower display shows `Error`.
+- **Tap Upper Display to Recover Expression** — Tapping the upper display during an `Error` state now clears the error and moves the invalid expression (`61+`) down to the lower display (State A) so the user can fix it.
+- **Smart Backspace on Error** — Tapping `Backspace` in an `Error` state now clears the error and removes the trailing invalid character (e.g. `61+` → `61`) instead of resetting the entire state.
 
 ### v4 — 2026-07-29
 

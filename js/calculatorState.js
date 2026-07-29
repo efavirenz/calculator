@@ -302,7 +302,9 @@ export class CalculatorState {
   /** Backspace: removes one character, honoring the two-state display rules. */
   backspace() {
     if (this.isError) {
-      this.reset();
+      this.errorMessage = null;
+      this.displayState = DisplayState.ENTRY;
+      if (this.tokens.length > 0) this.tokens.pop();
       return;
     }
 
@@ -338,13 +340,13 @@ export class CalculatorState {
   /**
    * Moves the frozen upper-line expression down into the editable
    * lower line without deleting anything (used when the user taps the
-   * upper display line directly to resume editing it). No-op unless
-   * currently showing a result (State B).
+   * upper display line directly to resume editing it).
    */
   recallExpressionToEntry() {
-    if (this.displayState !== DisplayState.RESULT) return;
+    if (this.displayState !== DisplayState.RESULT && !this.isError) return;
     this.displayState = DisplayState.ENTRY;
     this.resultString = null;
+    this.errorMessage = null;
   }
 
   /**
