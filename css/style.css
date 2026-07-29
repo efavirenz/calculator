@@ -129,14 +129,29 @@ button {
 }
 
 .version-badge {
+  font-family: inherit;
   font-size: 12px;
   font-weight: 700;
   color: var(--color-text-dim);
   background: rgba(255, 255, 255, 0.08);
+  border: none;
   border-radius: 999px;
-  padding: 3px 9px;
+  padding: 4px 10px;
   letter-spacing: 0.02em;
   line-height: 1.4;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.version-badge:hover,
+.version-badge:focus-visible {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.version-badge:active {
+  transform: scale(0.95);
 }
 
 /* ---------------------------------- Display ---------------------------------- */

@@ -19,7 +19,7 @@ import {
   flashButton,
   showCopyToast,
 } from './uiRenderer.js';
-import { registerServiceWorker, setupInstallPrompt } from './pwaBootstrap.js';
+import { registerServiceWorker, setupInstallPrompt, setupForceUpdate } from './pwaBootstrap.js';
 
 function main() {
   const state = new CalculatorState();
@@ -163,6 +163,7 @@ function main() {
 
   registerServiceWorker();
   setupInstallPrompt(document.getElementById('install-btn'));
+  setupForceUpdate(document.getElementById('version-badge'));
 
   render();
 }
