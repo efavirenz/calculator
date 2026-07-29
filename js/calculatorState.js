@@ -372,6 +372,16 @@ export class CalculatorState {
   evaluate() {
     if (this.isEmpty) return;
 
+    // Strip any trailing operator tokens before evaluating (e.g. '61+' -> '61')
+    while (
+      this.tokens.length > 0 &&
+      this.tokens[this.tokens.length - 1].kind === 'operator'
+    ) {
+      this.tokens.pop();
+    }
+
+    if (this.isEmpty) return;
+
     let expr = this.rawExpression;
     const balance = this.parenBalance;
     if (balance > 0) {

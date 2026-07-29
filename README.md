@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v5-blue)
+![version](https://img.shields.io/badge/version-v6-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -323,6 +323,12 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v6 — 2026-07-29
+
+#### 🧼 Auto-Trim Trailing Operators on Evaluation
+
+- **Graceful Trailing Operator Trimming** — Tapping `=` when an expression ends with binary operators (e.g. `61+`, `12+3+`, or `5×10÷`) now automatically strips trailing operator tokens before evaluating. The upper display shows the sanitized expression (e.g. `61` or `12+3`) and lower display displays the calculation result, preventing unnecessary syntax `Error` states.
 
 ### v5 — 2026-07-29
 
