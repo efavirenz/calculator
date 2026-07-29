@@ -307,10 +307,14 @@ export class CalculatorState {
     }
 
     if (this.displayState === DisplayState.RESULT) {
-      // Move expression back to the lower display, clear the result.
+      // Backspace on the showed answer (lower display), switch to State A (upper cleared)
+      this.tokens = this._tokensFromString(this.resultString || '');
       this.displayState = DisplayState.ENTRY;
       this.resultString = null;
-      if (this.tokens.length > 0) this.tokens.pop();
+      this.exponentMode = false;
+      if (this.tokens.length > 0) {
+        this.tokens.pop();
+      }
       return;
     }
 

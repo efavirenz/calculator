@@ -3,7 +3,7 @@
 An iPhone-style calculator built as a installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v3-blue)
+![version](https://img.shields.io/badge/version-v4-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -324,6 +324,14 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v4 — 2026-07-29
+
+#### 🚀 iOS WebKit Fixes & Updated Backspace Behavior
+
+- **Forced iOS WebKit GPU Layer Flush (Option B)** — Set `upperEl.style.display = 'none'` when in State A (and `''` in State B). This forces iOS WebKit on iPhones to completely unmount and flush the GPU layer for the upper display, guaranteeing the upper line is 100% cleared upon tapping `AC` or operators (`+`, `-`, `×`, `÷`).
+- **`autoShrinkToFit` Fallback Guards** — Added numerical fallbacks (`|| 34` / `|| 18`) to `parseFloat(getComputedStyle...)` in `uiRenderer.js` so font resizing never receives `NaNpx` under mobile WebKit viewports.
+- **Revised Backspace in State B** — Tapping `Backspace` while showing a result (State B) now performs a backspace directly on the result answer (lower display) while clearing the upper display and returning to State A (instead of restoring the old expression).
 
 ### v3 — 2026-07-28
 

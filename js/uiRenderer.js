@@ -111,21 +111,26 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
   lowerEl.classList.remove('is-error');
 
   if (displayState === 'B') {
+    upperEl.style.display = '';
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = resultString !== null ? addThousandsSeparators(resultString) : '';
   } else {
-    // State A: upper stays empty; lower shows the live expression.
+    // State A: hide upper display completely (forces iOS WebKit GPU layer flush); lower shows live expression.
+    upperEl.style.display = 'none';
     lowerEl.appendChild(renderTokensToFragment(tokens.length ? tokens : [{ char: '0', kind: 'digit', isExponent: false, hidden: false }]));
   }
 
   autoShrinkToFit(lowerEl);
-  autoShrinkToFit(upperEl);
+  if (displayState === 'B') {
+    autoShrinkToFit(upperEl);
+  }
 }
 
 /** Shrinks font-size on the display line if the content overflows its box. */
 function autoShrinkToFit(el) {
-  const maxFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-max-font'));
-  const minFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-min-font'));
+  const isUpper = el.id === 'upper-display';
+  const maxFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-max-font')) || (isUpper ? 34 : 64);
+  const minFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-min-font')) || (isUpper ? 18 : 26);
   el.style.fontSize = `${maxFontPx}px`;
 
   let currentSize = maxFontPx;
