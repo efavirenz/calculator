@@ -6,7 +6,7 @@
  * turns it into DOM updates. It never mutates calculator state itself.
  */
 
-import { addThousandsSeparators, formatExpressionWithCommas } from './formatUtils.js';
+import { addThousandsSeparators, formatExpressionWithCommas, stripLeadingZeros } from './formatUtils.js';
 
 const SELECTORS = {
   upperDisplay: '#upper-display',
@@ -63,7 +63,11 @@ function renderTokensToFragment(tokens) {
         numStr += tokens[i].char;
         i += 1;
       }
-      const textNode = document.createTextNode(addThousandsSeparators(numStr));
+      // Strip leading zeros before applying thousands separators so that
+      // e.g. "001" renders as "1" and "0,001" (comma-as-thousands) renders
+      // as "0.001" → still correct because stripping only touches the
+      // integer part ("0" stays "0" before a decimal point).
+      const textNode = document.createTextNode(addThousandsSeparators(stripLeadingZeros(numStr)));
       fragment.appendChild(textNode);
       continue;
     }

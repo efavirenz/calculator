@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.2-blue)
+![version](https://img.shields.io/badge/version-v6.3-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -142,7 +142,7 @@ grouping parens around the exponent — see §7.
 | `historyManager.js`   | In-memory history list: newest-first, 50-item cap.                     | `storageManager.js`    |
 | `storageManager.js`   | `localStorage` read/write with try/catch guards.                       | nothing                |
 | `formatUtils.js`      | Token stream → plain-text string (Unicode superscripts) for history.   | nothing                |
-| `pwaBootstrap.js`     | Registers `service-worker.js`, wires optional install prompt.          | nothing                |
+| `pwaBootstrap.js`     | Registers `service-worker.js`, force update on badge tap, wires optional install prompt. | nothing                |
 | `app.js`              | Composition root: instantiates everything, wires callbacks.            | all of the above       |
 
 ## 7. Expression Engine Design
@@ -217,11 +217,12 @@ Key: `calculator.history.v1` → JSON array of:
   support. The service worker precaches the full app shell (HTML, CSS, JS,
   icons) on `install`, using a **cache-first** strategy with a network
   fallback for anything else same-origin.
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v4`. The `activate`
+- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.3`. The `activate`
   handler deletes any cache whose name starts with `calculator-cache-` and
   doesn't match the current version. **Release process:** bump
   `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
-  cached file, so returning users don't get stuck on stale assets.
+  cached file, so returning users don't get stuck on stale assets. Tapping
+  the version badge in the topbar automatically purges old caches and reloads.
 - **GitHub Pages subpath compatibility**: every path in `manifest.json`,
   `service-worker.js`, and `index.html` is relative (`./...`), and
   `start_url` / `scope` are both `"./"`. This is required because GitHub
@@ -324,6 +325,24 @@ Per the "most iOS-like behavior, document the decision" rule:
 
 ## 15. Version History
 
+### v6.3 — 2026-08-01
+
+#### 🔢 Leading-Zero Display Suppression
+
+- **Strip leading zeros from display** — Numbers typed with leading zeros (e.g. `0,001` entered via copy-paste or thousands-separator input) now render without the redundant leading zeros in both State A (lower display) and State B (upper display). `0,001+0,002` shows as `1+2`. The fix is purely cosmetic — evaluation uses the raw token stream unchanged.
+  - New `stripLeadingZeros()` helper in `formatUtils.js` strips the integer-part leading zeros while preserving a mandatory `0` before a decimal point (`0.5` stays `0.5`).
+  - `uiRenderer.js` applies `stripLeadingZeros()` before `addThousandsSeparators()` when rendering digit/decimal token runs.
+  - `tokensToPlainText()` in `formatUtils.js` refactored to group digit/decimal runs and apply the same stripping, so history entries match the display.
+
+### v6.2 — 2026-07-29
+
+#### 📱 iOS Safari UI Lock, Rapid Tap Fix & Copy to Clipboard
+
+- **iOS Safari UI Lock & Overscroll Prevention** — Locked container overscroll bounce using `overscroll-behavior: none`, `position: fixed` layout rules, `touch-action: manipulation`, and non-scrollable `touchmove` prevention, preventing the UI/keypad from bouncing up/shifting during swipes or rapid taps.
+- **Immediate Touch Response & Rapid Tap Fix** — Switched keypad event handling to `pointerdown` with `preventDefault()`, eliminating iOS 300ms touch delay and preventing dropped inputs during rapid button pressing.
+- **Tap Lower Display to Copy + Toast** — Tapping the lower display line copies the displayed text/result to the system clipboard and triggers a smooth floating `Copied` notification toast.
+- **Interactive Version Badge & SW Force Update** — Updated `CACHE_VERSION` to `v6.2` with automatic service worker checks on launch. Tapping the `v6.2` version badge unregisters service workers, clears `CacheStorage`, and reloads to guarantee instantaneous client updates.
+
 ### v6.1 — 2026-07-29
 
 #### 🛡️ Comprehensive Code Audit & Remediation
@@ -334,14 +353,6 @@ Per the "most iOS-like behavior, document the decision" rule:
 - **LocalStorage Data Validation** — `loadHistory()` now filters and validates stored entry shapes to prevent crashes from corrupted entries.
 - **Mathematical Edge Cases** — `0^(-1)` reciprocal power evaluated as `Division by zero` error. Corrected `_tokensFromString` scientific notation expansion.
 - **Automated Unit Test Suite** — Added 11 automated unit tests (`tests/parser.test.js`, `tests/state.test.js`) using Node.js native test runner.
-
-### v6.2 — 2026-07-29
-
-#### 📱 iOS Safari UI Lock, Rapid Tap Fix & Copy to Clipboard
-
-- **iOS Safari UI Lock & Overscroll Prevention** — Locked container overscroll bounce using `overscroll-behavior: none`, `position: fixed` layout rules, `touch-action: manipulation`, and non-scrollable `touchmove` prevention, preventing the UI/keypad from bouncing up/shifting during swipes or rapid taps.
-- **Immediate Touch Response & Rapid Tap Fix** — Switched keypad event handling to `pointerdown` with `preventDefault()`, eliminating iOS 300ms touch delay and preventing dropped inputs during rapid button pressing.
-- **Tap Lower Display to Copy + Toast** — Tapping the lower display line copies the displayed text/result to the system clipboard and triggers a smooth floating `Copied` notification toast.
 
 ### v6 — 2026-07-29
 

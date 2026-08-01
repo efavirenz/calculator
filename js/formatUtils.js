@@ -23,20 +23,64 @@ const SUPERSCRIPT_MAP = {
 };
 
 /**
- * @param {Array<{char:string, isExponent:boolean, hidden:boolean}>} tokens
+ * @param {Array<{char:string, isExponent:boolean, hidden:boolean, kind:string}>} tokens
  * @returns {string}
  */
 export function tokensToPlainText(tokens) {
   let out = '';
-  for (const token of tokens) {
-    if (token.hidden) continue;
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token.hidden) { i += 1; continue; }
+
+    if (!token.isExponent && (token.kind === 'digit' || token.kind === 'decimal')) {
+      // Collect the full number string then strip leading zeros.
+      let numStr = '';
+      while (
+        i < tokens.length &&
+        !tokens[i].hidden &&
+        !tokens[i].isExponent &&
+        (tokens[i].kind === 'digit' || tokens[i].kind === 'decimal')
+      ) {
+        numStr += tokens[i].char;
+        i += 1;
+      }
+      out += stripLeadingZeros(numStr);
+      continue;
+    }
+
     if (token.isExponent) {
       out += SUPERSCRIPT_MAP[token.char] ?? token.char;
     } else {
       out += token.char;
     }
+    i += 1;
   }
   return out;
+}
+
+/**
+ * Strips leading zeros from the integer part of a number string,
+ * while preserving a single leading zero before a decimal point
+ * (e.g. "0.5" stays "0.5") and leaving scientific notation intact.
+ * Examples: "001" → "1", "001.5" → "1.5", "0.001" → "0.001".
+ * @param {string} numStr
+ * @returns {string}
+ */
+export function stripLeadingZeros(numStr) {
+  if (typeof numStr !== 'string' || numStr === '') return numStr;
+  if (/e/i.test(numStr)) return numStr;
+
+  const isNegative = numStr.startsWith('-');
+  const unsigned = isNegative ? numStr.slice(1) : numStr;
+  const dotIdx = unsigned.indexOf('.');
+  const intPart = dotIdx === -1 ? unsigned : unsigned.slice(0, dotIdx);
+  const fracPart = dotIdx === -1 ? '' : unsigned.slice(dotIdx);
+
+  // Strip leading zeros from the integer part; keep at least one digit.
+  const stripped = intPart.replace(/^0+/, '') || '0';
+
+  return `${isNegative ? '-' : ''}${stripped}${fracPart}`;
 }
 
 /**
