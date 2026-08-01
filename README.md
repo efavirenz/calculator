@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.4-blue)
+![version](https://img.shields.io/badge/version-v6.5-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -217,7 +217,7 @@ Key: `calculator.history.v1` → JSON array of:
   support. The service worker precaches the full app shell (HTML, CSS, JS,
   icons) on `install`, using a **cache-first** strategy with a network
   fallback for anything else same-origin.
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.4`. The `activate`
+- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.5`. The `activate`
   handler deletes any cache whose name starts with `calculator-cache-` and
   doesn't match the current version. **Release process:** bump
   `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
@@ -324,6 +324,12 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v6.5 — 2026-08-01
+
+#### 🐛 Double-Input Touch Fix
+
+- **Pointer/Click Event Synchronization Fix** — Fixed input controller state bug where `lastPointerType` flag was cleared in a microtask before synthetic `click` events executed, causing duplicate button press dispatches (`66` on single tap).
 
 ### v6.4 — 2026-08-01
 
