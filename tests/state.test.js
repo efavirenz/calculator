@@ -23,7 +23,6 @@ test('Auto-closing unclosed parentheses on evaluation', () => {
   state.inputDigit('5');
   state.inputOperator('+');
   state.inputDigit('5');
-  // Paren not closed explicitly
 
   const outcome = state.evaluate();
   assert.equal(outcome.success, true);
@@ -41,7 +40,7 @@ test('Trailing operator auto-trimming on evaluation', () => {
   assert.equal(outcome.result, '61');
 });
 
-test('Pre-decimal digit limit check', () => {
+test('Pre-decimal digit limit check (F-002 forward scanning)', () => {
   const state = new CalculatorState();
   for (let i = 0; i < 15; i++) state.inputDigit('1');
   assert.equal(state.tokens.length, 15);
@@ -62,4 +61,48 @@ test('Reciprocal zero shows Division by zero error', () => {
 
   assert.equal(outcome.success, false);
   assert.equal(outcome.error, 'Division by zero');
+});
+
+test('Backspace retains exponentMode after popping digit following power operator (F-008)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('5');
+  state.inputPower(); // inserts hidden '^', exponentMode = true
+  state.inputDigit('2'); // isExponent = true
+  assert.equal(state.exponentMode, true);
+
+  state.backspace(); // pops '2'
+  assert.equal(state.exponentMode, true); // Should stay in exponentMode because '^' is trailing
+
+  state.inputDigit('3');
+  assert.equal(state.tokens[state.tokens.length - 1].isExponent, true);
+  assert.equal(state.rawExpression, '5^3');
+});
+
+test('Close parenthesis disallowed directly after operator (F-006)', () => {
+  const state = new CalculatorState();
+  state.inputOpenParen();
+  state.inputDigit('5');
+  state.inputOperator('+');
+  state.inputCloseParen(); // Should be no-op because last token is operator '+'
+
+  assert.equal(state.rawExpression, '(5+');
+});
+
+test('_tokensFromString converts scientific notation properly (F-001)', () => {
+  const state = new CalculatorState();
+  state.resultString = '1e+15';
+  state.displayState = DisplayState.RESULT;
+
+  state.inputOperator('+'); // re-tokenizes resultString
+  assert.equal(state.rawExpression, '1000000000000000+');
+});
+
+test('toggleSign toggles numeric operand sign correctly', () => {
+  const state = new CalculatorState();
+  state.inputDigit('5');
+  state.toggleSign();
+  assert.equal(state.rawExpression, '-5');
+
+  state.toggleSign();
+  assert.equal(state.rawExpression, '5');
 });

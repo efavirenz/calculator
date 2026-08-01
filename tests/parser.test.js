@@ -42,3 +42,22 @@ test('Parentheses precedence and auto-evaluation', () => {
   const result = evaluateExpression('(2 + 3) × 4');
   assert.equal(result, '20');
 });
+
+test('Bare dot throws Malformed decimal number error (F-005)', () => {
+  assert.throws(
+    () => evaluateExpression('.'),
+    (err) => err instanceof ExpressionError && err.message === 'Malformed decimal number'
+  );
+});
+
+test('Multiple dots in number throw Malformed decimal number error', () => {
+  assert.throws(
+    () => evaluateExpression('1.2.3 + 4'),
+    (err) => err instanceof ExpressionError && err.message === 'Malformed decimal number'
+  );
+});
+
+test('Nested parentheses evaluation', () => {
+  const result = evaluateExpression('((2 + 3) × 4) + 1');
+  assert.equal(result, '21');
+});

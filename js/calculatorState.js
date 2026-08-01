@@ -162,17 +162,18 @@ export class CalculatorState {
   }
 
   _leadingDigitLimitReached() {
+    if (this._trailingNumberHasDecimal().hasDecimal) {
+      return false;
+    }
     let i = this.tokens.length - 1;
-    let digitCount = 0;
-    let sawDecimal = false;
     while (i >= 0 && (this.tokens[i].kind === 'digit' || this.tokens[i].kind === 'decimal')) {
-      if (this.tokens[i].kind === 'decimal') {
-        sawDecimal = true;
-        digitCount = 0; // reset, digits after decimal don't count towards pre-decimal limit
-      } else if (!sawDecimal) {
-        digitCount += 1;
-      }
       i -= 1;
+    }
+    const start = i + 1;
+    let digitCount = 0;
+    for (let j = start; j < this.tokens.length; j += 1) {
+      if (this.tokens[j].kind === 'decimal') break;
+      if (this.tokens[j].kind === 'digit') digitCount += 1;
     }
     return digitCount >= MAX_DIGITS_BEFORE_DECIMAL;
   }
@@ -302,6 +303,8 @@ export class CalculatorState {
   inputCloseParen() {
     this._clearErrorIfNeeded();
     if (this.parenBalance <= 0) return; // disabled: no-op
+    const last = this.tokens[this.tokens.length - 1];
+    if (last && last.kind === 'operator') return;
     this.tokens.push(makeToken(')', 'rparen', { isExponent: this.exponentMode }));
   }
 
@@ -333,9 +336,11 @@ export class CalculatorState {
       this.exponentMode = false;
     }
     // Recompute exponentMode based on whether the new trailing run is
-    // still marked as exponent content.
+    // still marked as exponent content or follows a hidden '^' operator.
     const last = this.tokens[this.tokens.length - 1];
-    this.exponentMode = Boolean(last && last.isExponent && last.kind !== 'operator');
+    this.exponentMode = Boolean(
+      last && ((last.kind === 'operator' && last.char === '^') || (last.isExponent && last.kind !== 'operator'))
+    );
   }
 
   /** AC: full reset. */
@@ -400,7 +405,7 @@ export class CalculatorState {
       this.displayState = DisplayState.RESULT;
       this.exponentMode = false;
       this.errorMessage = null;
-      return { success: true, expression: this.getExpressionDisplayTokens(), result };
+      return { success: true, expression: this.tokens.map((t) => ({ ...t })), result };
     } catch (err) {
       this.errorMessage = err instanceof ExpressionError ? err.message : 'Error';
       return { success: false, error: this.errorMessage };
@@ -432,8 +437,12 @@ export class CalculatorState {
     if (str.includes('e') || str.includes('E')) {
       const num = Number(str);
       if (Number.isFinite(num)) {
-        // Expand scientific notation into standard decimal string
-        formattedStr = num.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 12 });
+        const absNum = Math.abs(num);
+        const decimals = absNum < 1 ? 20 : Math.max(0, 12 - Math.floor(Math.log10(absNum)) - 1);
+        formattedStr = num.toFixed(Math.min(decimals, 20));
+        if (formattedStr.includes('.')) {
+          formattedStr = formattedStr.replace(/\.?0+$/, '');
+        }
       }
     }
 

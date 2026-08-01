@@ -131,6 +131,9 @@ export class InputController {
       }
 
       button.dispatchEvent(new CustomEvent('calc-pressed', { bubbles: true }));
+      Promise.resolve().then(() => {
+        lastPointerType = null;
+      });
     });
 
     // Fallback for accessibility/keyboard synthetic clicks when pointerdown was not triggered

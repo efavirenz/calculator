@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.3-blue)
+![version](https://img.shields.io/badge/version-v6.4-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -217,7 +217,7 @@ Key: `calculator.history.v1` → JSON array of:
   support. The service worker precaches the full app shell (HTML, CSS, JS,
   icons) on `install`, using a **cache-first** strategy with a network
   fallback for anything else same-origin.
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.3`. The `activate`
+- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.4`. The `activate`
   handler deletes any cache whose name starts with `calculator-cache-` and
   doesn't match the current version. **Release process:** bump
   `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
@@ -324,6 +324,16 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v6.4 — 2026-08-01
+
+#### 🛠 Audit Fixes & Quality Hardening
+
+- **Scientific Notation Re-Tokenization Fix** — Replaced invalid `toLocaleString('fullwide')` call with explicit `toFixed()` and zero stripping in `_tokensFromString()` to ensure correct re-entry from scientific notation results across all browsers.
+- **Exponent Mode Backspace Fix** — Fixed state bug where backspacing past an exponent digit cleared `exponentMode` despite the hidden `^` operator remaining in the token stream.
+- **Forward Scanning Pre-Decimal Digit Limit** — Refactored `_leadingDigitLimitReached()` to scan forward from start of current number, preventing digit limit bypasses via backspace sequences and allowing post-decimal digits without restriction.
+- **Lexer & Parser Hardening** — Disallowed bare `.` inputs in lexer (`Malformed decimal number`), guarded `inputCloseParen()` against trailing operators, and ensured immutable returns from `evaluate()`.
+- **Test Suite Expansion** — Expanded test coverage from 6 to 22 test cases (`node --test`), covering state transitions, formatting utilities, and parser edge cases.
 
 ### v6.3 — 2026-08-01
 

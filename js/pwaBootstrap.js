@@ -49,7 +49,7 @@ export function setupForceUpdate(versionBadgeEl) {
     } catch (err) {
       console.warn('Purge cache error:', err);
     }
-    window.location.reload(true);
+    window.location.reload();
   });
 }
 

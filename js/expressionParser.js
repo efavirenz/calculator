@@ -89,6 +89,9 @@ export function lex(input) {
         numStr += input[j];
         j += 1;
       }
+      if (!/\d/.test(numStr)) {
+        throw new ExpressionError('Malformed decimal number');
+      }
       tokens.push({ type: 'number', value: numStr });
       i = j;
       continue;
