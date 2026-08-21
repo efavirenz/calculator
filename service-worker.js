@@ -10,7 +10,7 @@
  * caches, so returning users won't get stuck on stale assets.
  */
 
-const CACHE_VERSION = 'v6.7';
+const CACHE_VERSION = 'v6.8';
 const CACHE_NAME = `calculator-cache-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

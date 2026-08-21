@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.7-blue)
+![version](https://img.shields.io/badge/version-v6.8-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -324,6 +324,13 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v6.8 — 2026-08-21
+ 
+#### 📐 Landscape Layout Adjustments & Display Alignment
+ 
+- **Swapped `+` and `=` Positions in Landscape** — Moved `=` to column 5 and `+` to column 6 in the bottom row, neatly grouping all four basic arithmetic operators (`÷`, `×`, `−`, `+`) in the rightmost column.
+- **Unified Lower Display Vertical Position Across States** — Preserved upper display spacing in landscape State A using `visibility: hidden` and a non-breaking space instead of removing it from flow with `display: none`, keeping the lower display locked to the exact same vertical baseline in both State A and State B.
 
 ### v6.7 — 2026-08-21
  

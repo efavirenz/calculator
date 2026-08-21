@@ -566,12 +566,12 @@ button {
   .btn[data-action="backspace"] { grid-row: 3; grid-column: 5; }
   .btn[data-action="op-subtract"] { grid-row: 3; grid-column: 6; }
 
-  /* Row 4: 0 (span 2), ., +/-, +, = */
+  /* Row 4: 0 (span 2), ., +/-, =, + */
   .btn[data-value="0"] { grid-row: 4; grid-column: 1 / span 2; }
   .btn[data-action="decimal"] { grid-row: 4; grid-column: 3; }
   .btn[data-action="sign"] { grid-row: 4; grid-column: 4; }
-  .btn[data-action="op-add"] { grid-row: 4; grid-column: 5; }
-  .btn[data-action="equals"] { grid-row: 4; grid-column: 6; }
+  .btn[data-action="equals"] { grid-row: 4; grid-column: 5; }
+  .btn[data-action="op-add"] { grid-row: 4; grid-column: 6; }
 }
 
 /* ---------------------------------- Copy toast ---------------------------------- */

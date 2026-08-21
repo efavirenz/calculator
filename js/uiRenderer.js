@@ -94,12 +94,14 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
 
   upperEl.textContent = '';
   upperEl.style.fontSize = '';
+  upperEl.style.visibility = '';
 
   lowerEl.textContent = '';
   lowerEl.style.fontSize = '';
 
   if (errorMessage) {
     upperEl.style.display = '';
+    upperEl.style.visibility = '';
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = errorMessage;
     lowerEl.classList.add('is-error');
@@ -112,11 +114,20 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
 
   if (displayState === 'B') {
     upperEl.style.display = '';
+    upperEl.style.visibility = '';
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = resultString !== null ? addThousandsSeparators(resultString) : '';
   } else {
-    // State A: hide upper display completely (forces iOS WebKit GPU layer flush); lower shows live expression.
-    upperEl.style.display = 'none';
+    const isLandscape = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(orientation: landscape) and (max-height: 550px)').matches;
+    if (isLandscape) {
+      upperEl.style.display = '';
+      upperEl.style.visibility = 'hidden';
+      upperEl.textContent = '\u00A0';
+    } else {
+      // State A in portrait: hide upper display completely (forces iOS WebKit GPU layer flush); lower shows live expression.
+      upperEl.style.display = 'none';
+      upperEl.style.visibility = '';
+    }
     lowerEl.appendChild(renderTokensToFragment(tokens.length ? tokens : [{ char: '0', kind: 'digit', isExponent: false, hidden: false }]));
   }
 
