@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.8-blue)
+![version](https://img.shields.io/badge/version-v6.9-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -216,8 +216,9 @@ Key: `calculator.history.v1` → JSON array of:
 - `manifest.json` + `service-worker.js` provide installability and offline
   support. The service worker precaches the full app shell (HTML, CSS, JS,
   icons) on `install`, using a **cache-first** strategy with a network
-  fallback for anything else same-origin.
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.5`. The `activate`
+  fallback for anything else same-origin (navigational requests fallback to
+  `./index.html` on network failure).
+- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.9`. The `activate`
   handler deletes any cache whose name starts with `calculator-cache-` and
   doesn't match the current version. **Release process:** bump
   `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
@@ -243,9 +244,7 @@ Key: `calculator.history.v1` → JSON array of:
 
 ## 10. Accessibility
 
-- Full keyboard support: digits, `+ - × ÷ ^`, `(` `)` (respecting the same
-  balance-based disable rule as the on-screen button), `Enter`/`=` for
-  equals, `Escape` for AC, `Backspace`/`Delete` for backspace.
+- Full keyboard support: digits (0–9), `.`, `+ - × ÷ ^` (`*` and `x`/`X` for multiply, `/` for divide), `(` `)` (respecting balance-based disable rule), `1/x` (`r`/`R`), `+/-` (`F9`, `_`, `n`/`N`), `Enter`/`=` for equals, `Escape`/`c`/`C` for AC, `Backspace`/`Delete` for backspace.
 - `)` button exposes `aria-disabled` + the native `disabled` attribute when
   balance is 0.
 - All interactive elements are real `<button>`s with visible
@@ -324,6 +323,20 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v6.9 — 2026-08-21
+
+#### ⚙️ Calculation Engine Fixes, State Hardening & PWA Reliability
+
+- **Unary Minus & Operator Precedence Fixes** — Fixed parser handling for unary minus following binary operators without parentheses (e.g. `2^-3` = `0.125`, `5×-3` = `-15`, `10+-4` = `6`, `12÷-3` = `-4`) by pushing `u-` to the operator stack without prematurely popping pending binary operators.
+- **Sign Toggle (`+/-`) Edge Cases** — `toggleSign()` on parenthesized groups toggles cleanly without stacking minus tokens (`(5+3)` → `-(5+3)` → `(5+3)`). Exponent operand negation (`5^3` → `5^-3`) preserves `isExponent: true` metadata on the minus token.
+- **Implicit Multiplication & Syntax Guards** — Entering `(` directly after a digit, decimal, or `)` automatically inserts an implicit multiplication operator `×` (e.g. `5(3)` → `5×(3)` = `15`). Closing parenthesis `)` is blocked directly following `(` to prevent empty `()` expressions.
+- **Operand Boundary & Chained Reciprocals** — Extended trailing operand range detection (`_findTrailingOperandRange`) to capture both base and power for chained reciprocal calculations (`1/x`).
+- **Independent Fractional Digit Limiting** — Added `MAX_DIGITS_AFTER_DECIMAL = 15` so decimal places and integer digits are tracked independently without blocking fractional input.
+- **Scientific Notation & History Restoration** — `_tokensFromString()` properly expands fractional scientific notation (e.g. `1.5e-10` → `0.00000000015`). History entries without tokens fall back cleanly via token reconstruction and `DisplayState.ENTRY`.
+- **Storage & PWA Reliability** — Enhanced `loadHistory()` with deep token structure validation. Scoped service worker offline cache fallback to navigation requests (`event.request.mode === 'navigate'`) to prevent returning `index.html` for broken subresources. Added `"id": "./"` in `manifest.json`. Bumped `CACHE_VERSION` to `v6.9`.
+- **Expanded Keyboard Shortcuts** — Added shortcuts: `c`/`C` for AC/Clear, `x`/`X` for multiply, `r`/`R` for reciprocal (`1/x`), and `F9`/`_`/`n`/`N` for sign toggle (`+/-`).
+- **Comprehensive Unit Testing** — Expanded unit test suite to 33 automated tests (`node --test`) covering unary minus expressions, sign toggling, parentheses guards, and state recovery.
 
 ### v6.8 — 2026-08-21
  
