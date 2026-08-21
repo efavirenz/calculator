@@ -165,6 +165,19 @@ function main() {
   setupInstallPrompt(document.getElementById('install-btn'));
   setupForceUpdate(document.getElementById('version-badge'));
 
+  // Re-render on orientation or window size change so font sizes recalculate immediately
+  const orientationMq = window.matchMedia('(orientation: landscape)');
+  if (orientationMq.addEventListener) {
+    orientationMq.addEventListener('change', () => render());
+  } else if (orientationMq.addListener) {
+    orientationMq.addListener(() => render());
+  }
+  window.addEventListener('resize', () => render());
+  window.addEventListener('orientationchange', () => {
+    render();
+    setTimeout(render, 60);
+  });
+
   render();
 }
 

@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.6-blue)
+![version](https://img.shields.io/badge/version-v6.7-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -324,6 +324,14 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v6.7 — 2026-08-21
+ 
+#### 🖥️ Landscape Display Stability & Font Optimization
+ 
+- **Fixed Button Sizing Across Display States** — Locked `.display` height to fixed `70px` in landscape mode, ensuring keypad buttons retain constant dimensions when switching between State A (hidden upper display) and State B (visible upper display).
+- **Immediate Font Recalculation on Orientation Change** — Added `matchMedia`, `resize`, and `orientationchange` listeners in `app.js` to immediately re-render and recalculate font auto-scaling when switching between portrait and landscape.
+- **Enlarged Landscape Display Typography** — Increased upper display maximum font size from `18px` to `22px` and lower display maximum font size from `34px` to `42px` in landscape mode for clearer visibility.
 
 ### v6.6 — 2026-08-21
  

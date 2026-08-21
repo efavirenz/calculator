@@ -506,22 +506,21 @@ button {
   }
 
   .display {
-    flex: 0 0 auto;
-    height: auto;
-    min-height: 0;
+    flex: 0 0 70px;
+    height: 70px;
     padding: 0 16px 4px;
     justify-content: flex-end;
   }
 
   .display-upper {
-    --display-max-font: 18px;
-    --display-min-font: 13px;
-    min-height: 20px;
+    --display-max-font: 22px;
+    --display-min-font: 14px;
+    min-height: 24px;
   }
 
   .display-lower {
-    --display-max-font: 34px;
-    --display-min-font: 18px;
+    --display-max-font: 42px;
+    --display-min-font: 20px;
   }
 
   .keypad {
