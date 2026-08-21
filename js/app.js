@@ -7,7 +7,7 @@
  * connects modules together.
  */
 
-import { CalculatorState } from './calculatorState.js';
+import { CalculatorState, DisplayState } from './calculatorState.js';
 import { HistoryManager } from './historyManager.js';
 import { InputController } from './inputController.js';
 import { tokensToPlainText } from './formatUtils.js';
@@ -64,11 +64,8 @@ function main() {
       state.loadFromHistory(entry.tokens, entry.result);
     } else {
       state.clearAll();
-      for (const ch of entry.result) {
-        if (ch === '-') state.toggleSign();
-        else if (ch === '.') state.inputDecimal();
-        else state.inputDigit(ch);
-      }
+      state.tokens = state._tokensFromString(entry.result);
+      state.displayState = DisplayState.ENTRY;
     }
     render();
     toggleHistoryPanel(false);

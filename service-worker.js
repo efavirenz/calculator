@@ -10,7 +10,7 @@
  * caches, so returning users won't get stuck on stale assets.
  */
 
-const CACHE_VERSION = 'v6.8';
+const CACHE_VERSION = 'v6.9';
 const CACHE_NAME = `calculator-cache-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -80,7 +80,12 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => caches.match('./index.html'));
+        .catch(() => {
+          if (event.request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+          return undefined;
+        });
     })
   );
 });

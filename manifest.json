@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "Calculator",
   "short_name": "Calculator",
   "description": "An iPhone-style calculator, installable as a Progressive Web App.",

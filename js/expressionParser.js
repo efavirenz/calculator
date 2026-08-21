@@ -129,14 +129,7 @@ export function toRPN(tokens) {
 
       if ((opValue === '-' || opValue === '+') && isUnaryContext()) {
         if (opValue === '-') {
-          // Unary minus: push as a distinct high-precedence operator.
-          while (
-            opStack.length > 0 &&
-            opStack[opStack.length - 1].type === 'operator' &&
-            comparePrecedence(opStack[opStack.length - 1].value, 'u-')
-          ) {
-            output.push(opStack.pop());
-          }
+          // Unary minus: push as a distinct operator without popping pending binary operators.
           opStack.push({ type: 'operator', value: 'u-' });
         }
         // Unary plus is a no-op: skip pushing anything.

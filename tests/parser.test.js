@@ -61,3 +61,20 @@ test('Nested parentheses evaluation', () => {
   const result = evaluateExpression('((2 + 3) × 4) + 1');
   assert.equal(result, '21');
 });
+
+test('Negative power evaluation without parentheses (N-001)', () => {
+  assert.equal(evaluateExpression('2^-3'), '0.125');
+  assert.equal(evaluateExpression('2^-2'), '0.25');
+  assert.equal(evaluateExpression('10^-3'), '0.001');
+});
+
+test('Negative base with parentheses exponentiation', () => {
+  assert.equal(evaluateExpression('(-2)^2'), '4');
+  assert.equal(evaluateExpression('(-2)^3'), '-8');
+});
+
+test('Unary minus following binary operators', () => {
+  assert.equal(evaluateExpression('5×-3'), '-15');
+  assert.equal(evaluateExpression('10+-4'), '6');
+  assert.equal(evaluateExpression('12÷-3'), '-4');
+});

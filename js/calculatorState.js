@@ -25,6 +25,7 @@
 import { evaluateExpression, ExpressionError } from './expressionParser.js';
 
 const MAX_DIGITS_BEFORE_DECIMAL = 15;
+const MAX_DIGITS_AFTER_DECIMAL = 15;
 
 export const DisplayState = Object.freeze({
   ENTRY: 'A',
@@ -83,12 +84,29 @@ export class CalculatorState {
     const n = this.tokens.length;
     if (n === 0) return null;
 
-    const last = this.tokens[n - 1];
+    let end = n;
+    let start = this._findSingleOperandStart(end);
+    if (start === null) return null;
+
+    // If not actively entering exponent digits and preceded by '^',
+    // include the base in the trailing term (e.g. for reciprocal chaining).
+    if (!this.exponentMode && start > 0 && this.tokens[start - 1].kind === 'operator' && this.tokens[start - 1].char === '^') {
+      const baseStart = this._findSingleOperandStart(start - 1);
+      if (baseStart !== null) {
+        start = baseStart;
+      }
+    }
+
+    return { start, end, kind: 'term' };
+  }
+
+  _findSingleOperandStart(end) {
+    if (end <= 0) return null;
+    const last = this.tokens[end - 1];
 
     if (last.kind === 'rparen') {
-      // Walk backwards to find the matching '('.
       let depth = 0;
-      let i = n - 1;
+      let i = end - 1;
       while (i >= 0) {
         if (this.tokens[i].kind === 'rparen') depth += 1;
         else if (this.tokens[i].kind === 'lparen') depth -= 1;
@@ -96,25 +114,32 @@ export class CalculatorState {
         i -= 1;
       }
       if (i < 0) return null;
-      return { start: i, end: n, kind: 'paren' };
+
+      // Include a leading unary minus if present before the '('
+      if (i > 0 && this.tokens[i - 1].kind === 'operator' && this.tokens[i - 1].char === '-') {
+        const before = i > 1 ? this.tokens[i - 2] : null;
+        const isUnary = !before || before.kind === 'operator' || before.kind === 'lparen';
+        if (isUnary) {
+          return i - 1;
+        }
+      }
+      return i;
     }
 
     if (last.kind === 'digit' || last.kind === 'decimal') {
-      let i = n - 1;
+      let i = end - 1;
       while (i >= 0 && (this.tokens[i].kind === 'digit' || this.tokens[i].kind === 'decimal')) {
         i -= 1;
       }
-      // Include a leading unary minus if present (i.e. '-' preceded by
-      // nothing, an operator, or an open paren).
       const numStart = i + 1;
       if (i >= 0 && this.tokens[i].kind === 'operator' && this.tokens[i].char === '-') {
-        const before = this.tokens[i - 1];
+        const before = i > 0 ? this.tokens[i - 1] : null;
         const isUnary = !before || before.kind === 'operator' || before.kind === 'lparen';
         if (isUnary) {
-          return { start: i, end: n, kind: 'number' };
+          return i;
         }
       }
-      return { start: numStart, end: n, kind: 'number' };
+      return numStart;
     }
 
     return null;
@@ -162,20 +187,31 @@ export class CalculatorState {
   }
 
   _leadingDigitLimitReached() {
-    if (this._trailingNumberHasDecimal().hasDecimal) {
-      return false;
-    }
     let i = this.tokens.length - 1;
     while (i >= 0 && (this.tokens[i].kind === 'digit' || this.tokens[i].kind === 'decimal')) {
       i -= 1;
     }
     const start = i + 1;
-    let digitCount = 0;
+    let integerDigits = 0;
+    let fractionalDigits = 0;
+    let seenDecimal = false;
+
     for (let j = start; j < this.tokens.length; j += 1) {
-      if (this.tokens[j].kind === 'decimal') break;
-      if (this.tokens[j].kind === 'digit') digitCount += 1;
+      if (this.tokens[j].kind === 'decimal') {
+        seenDecimal = true;
+      } else if (this.tokens[j].kind === 'digit') {
+        if (seenDecimal) {
+          fractionalDigits += 1;
+        } else {
+          integerDigits += 1;
+        }
+      }
     }
-    return digitCount >= MAX_DIGITS_BEFORE_DECIMAL;
+
+    if (seenDecimal) {
+      return fractionalDigits >= MAX_DIGITS_AFTER_DECIMAL;
+    }
+    return integerDigits >= MAX_DIGITS_BEFORE_DECIMAL;
   }
 
   /** Appends a binary operator: + - × ÷ */
@@ -288,7 +324,8 @@ export class CalculatorState {
       // Already negative: remove the unary minus.
       this.tokens.splice(range.start, 1);
     } else {
-      this.tokens.splice(range.start, 0, makeToken('-', 'operator'));
+      const isExponent = Boolean(this.tokens[range.start]?.isExponent);
+      this.tokens.splice(range.start, 0, makeToken('-', 'operator', { isExponent }));
     }
   }
 
@@ -296,6 +333,12 @@ export class CalculatorState {
   inputOpenParen() {
     this._clearErrorIfNeeded();
     this._startFreshIfShowingResult();
+
+    const last = this.tokens[this.tokens.length - 1];
+    if (last && (last.kind === 'digit' || last.kind === 'decimal' || last.kind === 'rparen')) {
+      this.tokens.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
+    }
+
     this.tokens.push(makeToken('(', 'lparen', { isExponent: this.exponentMode }));
   }
 
@@ -304,7 +347,7 @@ export class CalculatorState {
     this._clearErrorIfNeeded();
     if (this.parenBalance <= 0) return; // disabled: no-op
     const last = this.tokens[this.tokens.length - 1];
-    if (last && last.kind === 'operator') return;
+    if (last && (last.kind === 'operator' || last.kind === 'lparen')) return;
     this.tokens.push(makeToken(')', 'rparen', { isExponent: this.exponentMode }));
   }
 

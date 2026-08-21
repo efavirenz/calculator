@@ -106,3 +106,104 @@ test('toggleSign toggles numeric operand sign correctly', () => {
   state.toggleSign();
   assert.equal(state.rawExpression, '5');
 });
+
+test('toggleSign on parenthesized group toggles cleanly without stacking (N-002)', () => {
+  const state = new CalculatorState();
+  state.inputOpenParen();
+  state.inputDigit('5');
+  state.inputOperator('+');
+  state.inputDigit('3');
+  state.inputCloseParen();
+  assert.equal(state.rawExpression, '(5+3)');
+
+  state.toggleSign();
+  assert.equal(state.rawExpression, '-(5+3)');
+
+  state.toggleSign();
+  assert.equal(state.rawExpression, '(5+3)');
+});
+
+test('toggleSign preserves isExponent on exponent operands (N-003)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('5');
+  state.inputPower();
+  state.inputDigit('3');
+  state.toggleSign();
+
+  const minusToken = state.tokens[state.tokens.length - 2];
+  assert.equal(minusToken.char, '-');
+  assert.equal(minusToken.isExponent, true);
+  assert.equal(state.rawExpression, '5^-3');
+
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '0.008');
+});
+
+test('inputOpenParen performs implicit multiplication (F-004)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('5');
+  state.inputOpenParen();
+  state.inputDigit('3');
+  state.inputCloseParen();
+  assert.equal(state.rawExpression, '5×(3)');
+
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '15');
+});
+
+test('inputCloseParen blocks empty parentheses () (F-003)', () => {
+  const state = new CalculatorState();
+  state.inputOpenParen();
+  state.inputCloseParen(); // Should be blocked
+  assert.equal(state.rawExpression, '(');
+});
+
+test('backspace from error state clears error (T-001)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('5');
+  state.inputOperator('÷');
+  state.inputDigit('0');
+  state.evaluate();
+  assert.equal(state.isError, true);
+
+  state.backspace();
+  assert.equal(state.isError, false);
+});
+
+test('chained reciprocal evaluates correctly (T-001)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('4');
+  state.inputReciprocal();
+  state.inputReciprocal();
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '4');
+});
+
+test('_tokensFromString converts fractional scientific notation properly (T-003)', () => {
+  const state = new CalculatorState();
+  state.resultString = '1.5e-10';
+  state.displayState = DisplayState.RESULT;
+  state.inputOperator('+');
+  assert.equal(state.rawExpression, '0.00000000015+');
+});
+
+test('loadFromHistory restores tokens and state correctly (T-001)', () => {
+  const state = new CalculatorState();
+  const tokens = [
+    { char: '2', kind: 'digit', isExponent: false, hidden: false },
+    { char: '+', kind: 'operator', isExponent: false, hidden: false },
+    { char: '2', kind: 'digit', isExponent: false, hidden: false },
+  ];
+  state.loadFromHistory(tokens, '4');
+  assert.equal(state.displayState, DisplayState.RESULT);
+  assert.equal(state.resultString, '4');
+
+  state.inputOperator('×');
+  state.inputDigit('3');
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '12');
+});
