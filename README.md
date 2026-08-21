@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.5-blue)
+![version](https://img.shields.io/badge/version-v6.6-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -325,11 +325,19 @@ Per the "most iOS-like behavior, document the decision" rule:
 
 ## 15. Version History
 
+### v6.6 — 2026-08-21
+ 
+#### 📱 Landscape Keypad Layout for iPhone
+ 
+- **6×4 Landscape Grid Layout** — Added dedicated CSS landscape layout (`@media (orientation: landscape) and (max-height: 550px)`) switching the 4×6 portrait keypad to a 6×4 grid. Digits (0–9, .) remain grouped on the left (columns 1–3) preserving muscle memory, while functions and operators (, ), ÷, 1/x, xʸ, ×, AC, ⌫, −, +/−, +, = are placed on the right (columns 4–6).
+- **Landscape Display & Topbar Scaling** — Scaled display lines and topbar height in landscape mode to prevent bottom rows from overflowing on iPhone screens.
+- **Safe Area Insets** — Respects landscape safe area insets for notches, dynamic islands, and home indicators.
+
 ### v6.5 — 2026-08-01
 
 #### 🐛 Double-Input Touch Fix
 
-- **Pointer/Click Event Synchronization Fix** — Fixed input controller state bug where `lastPointerType` flag was cleared in a microtask before synthetic `click` events executed, causing duplicate button press dispatches (`66` on single tap).
+- **Pointer/Click Event Synchronization Fix** — Fixed input controller state bug where `lastPointerType` flag was cleared in a microtask before synthetic `click` events executed, causing duplicate button press dispatches.
 
 ### v6.4 — 2026-08-01
 

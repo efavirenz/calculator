@@ -310,6 +310,7 @@ button {
   flex-direction: column;
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
   will-change: transform;
 }
 
@@ -478,6 +479,100 @@ button {
     --display-max-font: 28px;
     --display-min-font: 16px;
   }
+}
+
+/* ---------------------------------- Landscape mode (e.g. iPhone) ---------------------------------- */
+
+@media (orientation: landscape) and (max-height: 550px) {
+  .app {
+    padding-top: max(var(--safe-top), 4px);
+    padding-bottom: max(var(--safe-bottom), 4px);
+    padding-left: max(var(--safe-left), 12px);
+    padding-right: max(var(--safe-right), 12px);
+  }
+
+  .topbar {
+    padding: 2px 12px;
+  }
+
+  .icon-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .version-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+
+  .display {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+    padding: 0 16px 4px;
+    justify-content: flex-end;
+  }
+
+  .display-upper {
+    --display-max-font: 18px;
+    --display-min-font: 13px;
+    min-height: 20px;
+  }
+
+  .display-lower {
+    --display-max-font: 34px;
+    --display-min-font: 18px;
+  }
+
+  .keypad {
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: clamp(4px, 1.2vw, 8px);
+    padding: 0 8px 4px;
+  }
+
+  .btn {
+    min-height: 0;
+    min-width: 0;
+    font-size: clamp(16px, 3.2vw, 24px);
+    border-radius: 12px;
+  }
+
+  .btn-function {
+    font-size: clamp(13px, 2.6vw, 18px);
+  }
+
+  /* Keypad 6x4 Grid Placement */
+  /* Row 1: 7, 8, 9, (, ), ÷ */
+  .btn[data-value="7"] { grid-row: 1; grid-column: 1; }
+  .btn[data-value="8"] { grid-row: 1; grid-column: 2; }
+  .btn[data-value="9"] { grid-row: 1; grid-column: 3; }
+  .btn[data-action="paren-open"] { grid-row: 1; grid-column: 4; }
+  .btn[data-action="paren-close"] { grid-row: 1; grid-column: 5; }
+  .btn[data-action="op-divide"] { grid-row: 1; grid-column: 6; }
+
+  /* Row 2: 4, 5, 6, 1/x, xʸ, × */
+  .btn[data-value="4"] { grid-row: 2; grid-column: 1; }
+  .btn[data-value="5"] { grid-row: 2; grid-column: 2; }
+  .btn[data-value="6"] { grid-row: 2; grid-column: 3; }
+  .btn[data-action="reciprocal"] { grid-row: 2; grid-column: 4; }
+  .btn[data-action="power"] { grid-row: 2; grid-column: 5; }
+  .btn[data-action="op-multiply"] { grid-row: 2; grid-column: 6; }
+
+  /* Row 3: 1, 2, 3, AC, ⌫, − */
+  .btn[data-value="1"] { grid-row: 3; grid-column: 1; }
+  .btn[data-value="2"] { grid-row: 3; grid-column: 2; }
+  .btn[data-value="3"] { grid-row: 3; grid-column: 3; }
+  .btn[data-action="clear"] { grid-row: 3; grid-column: 4; }
+  .btn[data-action="backspace"] { grid-row: 3; grid-column: 5; }
+  .btn[data-action="op-subtract"] { grid-row: 3; grid-column: 6; }
+
+  /* Row 4: 0 (span 2), ., +/-, +, = */
+  .btn[data-value="0"] { grid-row: 4; grid-column: 1 / span 2; }
+  .btn[data-action="decimal"] { grid-row: 4; grid-column: 3; }
+  .btn[data-action="sign"] { grid-row: 4; grid-column: 4; }
+  .btn[data-action="op-add"] { grid-row: 4; grid-column: 5; }
+  .btn[data-action="equals"] { grid-row: 4; grid-column: 6; }
 }
 
 /* ---------------------------------- Copy toast ---------------------------------- */
