@@ -457,7 +457,9 @@ button {
   .btn,
   .history-panel,
   .history-overlay,
-  .icon-button {
+  .icon-button,
+  .clipboard-menu,
+  .copy-toast {
     transition: none;
   }
 }
@@ -572,6 +574,63 @@ button {
   .btn[data-action="sign"] { grid-row: 4; grid-column: 4; }
   .btn[data-action="equals"] { grid-row: 4; grid-column: 5; }
   .btn[data-action="op-add"] { grid-row: 4; grid-column: 6; }
+}
+
+/* ---------------------------------- Clipboard menu ---------------------------------- */
+
+.clipboard-menu {
+  position: fixed;
+  top: calc(var(--safe-top) + 54px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  display: flex;
+  background: rgba(44, 44, 46, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.clipboard-menu.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.clipboard-menu[hidden] {
+  display: none;
+}
+
+.clipboard-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 22px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.clipboard-menu-item:hover,
+.clipboard-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.clipboard-menu-item:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.clipboard-menu-item + .clipboard-menu-item {
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* ---------------------------------- Copy toast ---------------------------------- */

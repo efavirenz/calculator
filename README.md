@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v6.9-blue)
+![version](https://img.shields.io/badge/version-v7.0-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -323,6 +323,16 @@ Per the "most iOS-like behavior, document the decision" rule:
    operator).
 
 ## 15. Version History
+
+### v7.0 — 2026-08-23
+
+#### 📋 Lower Display Clipboard Context Menu (Copy & Paste)
+
+- **Interactive Copy & Paste Menu** — Tapping the lower display now reveals an iOS-style popup menu allowing users to choose between **Copy** and **Paste** actions instead of immediately copying.
+- **Smart Paste to Equation** — Selecting **Paste** reads text from the system clipboard, strips extraneous formatting (commas, whitespace, and currency symbols), validates numeric format, and feeds digits/decimals through the token state machine. Pasted numbers seamlessly append to the live expression or start fresh in result mode while respecting digit limits and decimal rules.
+- **Dynamic Feedback Toast** — Upgraded the floating notification toast to display contextual messages (`Copied`, `Pasted`, `Nothing to paste`, `Paste not supported`, `Paste permission denied`).
+- **Outside-Tap & Escape Dismissal** — Tapping anywhere outside the context menu or pressing the `Escape` key smoothly dismisses the menu.
+- **Service Worker & Test Coverage** — Bumped `CACHE_VERSION` to `v7.0` and expanded unit test suite to 38 automated test cases covering integer, decimal, negative, currency, and invalid clipboard paste scenarios.
 
 ### v6.9 — 2026-08-21
 

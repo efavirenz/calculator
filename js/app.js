@@ -17,9 +17,37 @@ import {
   renderHistory,
   toggleHistoryPanel,
   flashButton,
-  showCopyToast,
+  showToast,
+  showClipboardMenu,
+  hideClipboardMenu,
 } from './uiRenderer.js';
 import { registerServiceWorker, setupInstallPrompt, setupForceUpdate } from './pwaBootstrap.js';
+
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fallback for context without permissions
+  }
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const success = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return Boolean(success);
+  } catch {
+    return false;
+  }
+}
 
 function main() {
   const state = new CalculatorState();
@@ -81,42 +109,48 @@ function main() {
     render();
   });
 
-  // Tap lower display to copy current displayed text to iOS/browser clipboard
+  // Tap lower display to open Copy / Paste context menu
   const lowerDisplayEl = document.getElementById('lower-display');
-  lowerDisplayEl.addEventListener('click', async () => {
-    const textToCopy = lowerDisplayEl.textContent ? lowerDisplayEl.textContent.trim() : '';
-    if (!textToCopy) return;
+  const clipboardMenu = document.getElementById('clipboard-menu');
 
-    let success = false;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(textToCopy);
-        success = true;
-      }
-    } catch {
-      // Fallback for context without permissions
-    }
-
-    if (!success) {
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = textToCopy;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        success = document.execCommand('copy');
-        document.body.removeChild(textarea);
-      } catch {
-        success = false;
-      }
-    }
-
-    if (success) {
-      showCopyToast();
-    }
+  lowerDisplayEl.addEventListener('click', () => {
+    showClipboardMenu();
   });
+
+  if (clipboardMenu) {
+    clipboardMenu.addEventListener('click', async (event) => {
+      const item = event.target.closest('[data-clipboard]');
+      if (!item) return;
+
+      const action = item.dataset.clipboard;
+      hideClipboardMenu();
+
+      if (action === 'copy') {
+        const textToCopy = lowerDisplayEl.textContent ? lowerDisplayEl.textContent.trim() : '';
+        if (!textToCopy) return;
+        const copied = await copyToClipboard(textToCopy);
+        if (copied) {
+          showToast('Copied');
+        }
+      } else if (action === 'paste') {
+        try {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            const text = await navigator.clipboard.readText();
+            if (state.pasteNumber(text)) {
+              render();
+              showToast('Pasted');
+            } else {
+              showToast('Nothing to paste');
+            }
+          } else {
+            showToast('Paste not supported');
+          }
+        } catch {
+          showToast('Paste permission denied');
+        }
+      }
+    });
+  }
 
   // Button press flash feedback (delegated).
   keypadEl.addEventListener('calc-pressed', (event) => {
@@ -153,8 +187,11 @@ function main() {
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && document.getElementById('history-panel').classList.contains('is-open')) {
-      toggleHistoryPanel(false);
+    if (event.key === 'Escape') {
+      if (document.getElementById('history-panel').classList.contains('is-open')) {
+        toggleHistoryPanel(false);
+      }
+      hideClipboardMenu();
     }
   });
 

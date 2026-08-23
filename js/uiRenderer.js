@@ -16,6 +16,8 @@ const SELECTORS = {
   historyPanel: '#history-panel',
   historyList: '#history-list',
   historyOverlay: '#history-overlay',
+  clipboardMenu: '#clipboard-menu',
+  copyToast: '#copy-toast',
 };
 
 /**
@@ -244,15 +246,67 @@ export function flashButton(buttonEl) {
 
 let toastTimeout = null;
 
-/** Shows temporary 'Copied' floating notification toast. */
-export function showCopyToast() {
-  const toast = document.getElementById('copy-toast');
+/**
+ * Shows temporary floating notification toast.
+ * @param {string} [message='Copied']
+ */
+export function showToast(message = 'Copied') {
+  const toast = document.querySelector(SELECTORS.copyToast);
   if (!toast) return;
+  toast.textContent = message;
   toast.classList.add('is-visible');
   if (toastTimeout) window.clearTimeout(toastTimeout);
   toastTimeout = window.setTimeout(() => {
     toast.classList.remove('is-visible');
   }, 1500);
+}
+
+/** Shows temporary 'Copied' floating notification toast. (Alias for showToast) */
+export function showCopyToast() {
+  showToast('Copied');
+}
+
+let menuDismissHandler = null;
+
+/** Shows the clipboard context menu. */
+export function showClipboardMenu() {
+  const menu = document.querySelector(SELECTORS.clipboardMenu);
+  if (!menu) return;
+
+  menu.removeAttribute('hidden');
+  void menu.offsetWidth; // force reflow for transition
+  menu.classList.add('is-visible');
+
+  if (menuDismissHandler) {
+    document.removeEventListener('pointerdown', menuDismissHandler);
+  }
+  menuDismissHandler = (event) => {
+    if (!menu.contains(event.target)) {
+      hideClipboardMenu();
+    }
+  };
+  // Delay attachment so the click opening the menu does not immediately dismiss it
+  setTimeout(() => {
+    document.addEventListener('pointerdown', menuDismissHandler);
+  }, 0);
+}
+
+/** Hides the clipboard context menu. */
+export function hideClipboardMenu() {
+  const menu = document.querySelector(SELECTORS.clipboardMenu);
+  if (!menu) return;
+
+  menu.classList.remove('is-visible');
+  setTimeout(() => {
+    if (!menu.classList.contains('is-visible')) {
+      menu.setAttribute('hidden', '');
+    }
+  }, 150);
+
+  if (menuDismissHandler) {
+    document.removeEventListener('pointerdown', menuDismissHandler);
+    menuDismissHandler = null;
+  }
 }
 
 export { SELECTORS };

@@ -41,7 +41,7 @@
       </button>
       <div class="topbar-actions">
         <button id="install-btn" class="install-button" type="button" hidden>Install</button>
-        <button id="version-badge" class="version-badge" type="button" title="Tap to check for updates">v6.9</button>
+        <button id="version-badge" class="version-badge" type="button" title="Tap to check for updates">v7.0</button>
       </div>
     </header>
 
@@ -50,7 +50,12 @@
       <div id="lower-display" class="display-line display-lower" aria-label="Current value">0</div>
     </section>
 
-    <div id="copy-toast" class="copy-toast" aria-live="polite" aria-atomic="true">Copied</div>
+    <div id="clipboard-menu" class="clipboard-menu" role="menu" aria-label="Clipboard actions" hidden>
+      <button class="clipboard-menu-item" data-clipboard="copy" role="menuitem" type="button">Copy</button>
+      <button class="clipboard-menu-item" data-clipboard="paste" role="menuitem" type="button">Paste</button>
+    </div>
+
+    <div id="copy-toast" class="copy-toast" aria-live="polite" aria-atomic="true"></div>
 
     <section id="keypad" class="keypad" role="group" aria-label="Calculator keypad">
       <!-- Row 1: extended function row -->

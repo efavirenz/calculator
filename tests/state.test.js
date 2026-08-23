@@ -207,3 +207,57 @@ test('loadFromHistory restores tokens and state correctly (T-001)', () => {
   assert.equal(outcome.success, true);
   assert.equal(outcome.result, '12');
 });
+
+test('pasteNumber pastes integer into empty state', () => {
+  const state = new CalculatorState();
+  const ok = state.pasteNumber('12345');
+  assert.equal(ok, true);
+  assert.equal(state.rawExpression, '12345');
+});
+
+test('pasteNumber pastes decimal and formatted currency into expression', () => {
+  const state = new CalculatorState();
+  state.inputDigit('1');
+  state.inputDigit('0');
+  state.inputOperator('+');
+
+  const ok = state.pasteNumber('$1,234.50');
+  assert.equal(ok, true);
+  assert.equal(state.rawExpression, '10+1234.50');
+
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '1244.5');
+});
+
+test('pasteNumber pastes negative numbers correctly', () => {
+  const state = new CalculatorState();
+  const ok = state.pasteNumber('-50.25');
+  assert.equal(ok, true);
+  assert.equal(state.rawExpression, '-50.25');
+});
+
+test('pasteNumber rejects invalid non-numeric strings', () => {
+  const state = new CalculatorState();
+  state.inputDigit('9');
+  assert.equal(state.pasteNumber('hello world'), false);
+  assert.equal(state.pasteNumber(''), false);
+  assert.equal(state.pasteNumber('12+34'), false);
+  assert.equal(state.pasteNumber(null), false);
+  assert.equal(state.rawExpression, '9');
+});
+
+test('pasteNumber starts fresh when in RESULT display state', () => {
+  const state = new CalculatorState();
+  state.inputDigit('5');
+  state.inputOperator('+');
+  state.inputDigit('5');
+  state.evaluate();
+  assert.equal(state.displayState, DisplayState.RESULT);
+
+  const ok = state.pasteNumber('99');
+  assert.equal(ok, true);
+  assert.equal(state.displayState, DisplayState.ENTRY);
+  assert.equal(state.rawExpression, '99');
+});
+

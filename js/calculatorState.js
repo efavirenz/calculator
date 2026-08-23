@@ -214,6 +214,46 @@ export class CalculatorState {
     return integerDigits >= MAX_DIGITS_BEFORE_DECIMAL;
   }
 
+  /**
+   * Appends a pasted numeric string to the current expression.
+   * Strips thousands separators, whitespace, and currency symbols.
+   * Respects digit limits and decimal rules.
+   * @param {string} raw - clipboard text
+   * @returns {boolean} true if a number was successfully pasted
+   */
+  pasteNumber(raw) {
+    if (typeof raw !== 'string') return false;
+
+    // Strip thousands separators (commas), whitespace, and common currency symbols
+    const cleaned = raw.replace(/[,\s$€£¥₹]/g, '');
+    if (!cleaned) return false;
+
+    // Validate as numeric format (e.g. 123, -123, 123.45, -0.5, .5, -.5)
+    const match = cleaned.match(/^(-)?(\d*\.?\d+)$/);
+    if (!match) return false;
+
+    const isNegative = Boolean(match[1]);
+    const numberPart = match[2];
+    if (!numberPart || numberPart === '.') return false;
+
+    this._clearErrorIfNeeded();
+    this._startFreshIfShowingResult();
+
+    for (const ch of numberPart) {
+      if (ch === '.') {
+        this.inputDecimal();
+      } else if (ch >= '0' && ch <= '9') {
+        this.inputDigit(ch);
+      }
+    }
+
+    if (isNegative) {
+      this.toggleSign();
+    }
+
+    return true;
+  }
+
   /** Appends a binary operator: + - × ÷ */
   inputOperator(op) {
     this._clearErrorIfNeeded();
