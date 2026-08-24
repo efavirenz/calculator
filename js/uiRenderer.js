@@ -13,6 +13,9 @@ const SELECTORS = {
   lowerDisplay: '#lower-display',
   keypad: '#keypad',
   closeParenButton: '[data-action="paren-close"]',
+  reciprocalButton: '[data-action="reciprocal"]',
+  signButton: '[data-action="sign"]',
+  powerButton: '[data-action="power"]',
   historyPanel: '#history-panel',
   historyList: '#history-list',
   historyOverlay: '#history-overlay',
@@ -163,6 +166,41 @@ export function setCloseParenEnabled(enabled) {
   if (!btn) return;
   btn.disabled = !enabled;
   btn.setAttribute('aria-disabled', String(!enabled));
+}
+
+/**
+ * Enables/disables the '1/x' button based on operand availability.
+ * @param {boolean} enabled
+ */
+export function setReciprocalButtonState(enabled) {
+  const btn = document.querySelector(SELECTORS.reciprocalButton);
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.setAttribute('aria-disabled', String(!enabled));
+}
+
+/**
+ * Enables/disables the '+/-' button based on operand availability.
+ * @param {boolean} enabled
+ */
+export function setSignButtonState(enabled) {
+  const btn = document.querySelector(SELECTORS.signButton);
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.setAttribute('aria-disabled', String(!enabled));
+}
+
+/**
+ * Updates the disabled state and active dark-blue styling of the xʸ button.
+ * @param {boolean} enabled
+ * @param {boolean} active
+ */
+export function setPowerButtonState(enabled, active) {
+  const btn = document.querySelector(SELECTORS.powerButton);
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.setAttribute('aria-disabled', String(!enabled));
+  btn.classList.toggle('is-exponent-active', Boolean(active));
 }
 
 /**

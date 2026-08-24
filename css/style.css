@@ -264,6 +264,20 @@ button {
   font-size: clamp(18px, 5.5vw, 26px);
 }
 
+.btn-function.is-exponent-active {
+  background: #004080;
+  color: var(--color-text);
+}
+
+.btn-function.is-exponent-active:hover,
+.btn-function.is-exponent-active:focus-visible {
+  background: #004d99;
+}
+
+.btn-function.is-exponent-active:active {
+  background: #003366;
+}
+
 .btn-wide {
   grid-column: span 2;
   justify-content: center;

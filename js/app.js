@@ -14,6 +14,9 @@ import { tokensToPlainText } from './formatUtils.js';
 import {
   renderDisplay,
   setCloseParenEnabled,
+  setPowerButtonState,
+  setReciprocalButtonState,
+  setSignButtonState,
   renderHistory,
   toggleHistoryPanel,
   flashButton,
@@ -73,6 +76,9 @@ function main() {
       errorMessage: state.errorMessage,
     });
     setCloseParenEnabled(state.parenBalance > 0);
+    setPowerButtonState(state.isPowerEnabled, state.exponentMode);
+    setReciprocalButtonState(state.isReciprocalEnabled);
+    setSignButtonState(state.isSignEnabled);
   }
 
   const controller = new InputController({
@@ -136,7 +142,7 @@ function main() {
         try {
           if (navigator.clipboard && navigator.clipboard.readText) {
             const text = await navigator.clipboard.readText();
-            if (state.pasteNumber(text)) {
+            if (state.pasteExpression(text)) {
               render();
               showToast('Pasted');
             } else {

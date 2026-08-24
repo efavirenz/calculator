@@ -317,12 +317,49 @@ Per the "most iOS-like behavior, document the decision" rule:
 5. **History item tap**: re-runs the entry's *result* as a fresh calculation
    (rather than only previewing it), which is the more useful default for
    reusing a past value in a new calculation.
-6. **Exponent-mode interrupted by `(`**: since the spec only lists digits and
-   the decimal point as continuing exponent-entry mode, pressing `(` ends
-   exponent mode and starts a new normal-size term (same rule as pressing an
-   operator).
+6. **Exponent-mode persistence & auto-grouping**: Exponent mode persists
+   across operators and parentheses (e.g. `2^(3+1)`), rendered as superscript
+   and grouped into parentheses during evaluation. Pressing `xʸ` toggles off
+   exponent mode back to base level.
 
 ## 15. Version History
+
+### v7.4 — 2026-08-24
+
+#### 🧮 Sign Button State, 1/x Toggle Unwrapping & Negative Base Auto-Wrap
+
+- **`+/-` Button Enable/Disable State** — Added `isSignEnabled` getter and `setSignButtonState()` in `uiRenderer.js`, matching the `1/x` button rules (enabled only when trailing operand is a number, decimal, or `)`, and in completed result State B; disabled on empty expressions, operators, `(`, and error states). Added keyboard guard in `inputController.js` and initial disabled state in `index.html`.
+- **`1/x` Reciprocal Toggle Unwrapping** — Tapping `1/x` on an already-reciprocated operand `(1÷x)` now unwraps it back to `x` (e.g. `5` → `(1÷5)` → `5`), eliminating redundant `(1÷(1÷x))` nesting.
+- **`1/x` in Exponent Mode (Superscript)** — Tapping `1/x` on an exponent operand now produces a superscript `(1÷x)` with `isExponent: true` tokens and preserves exponent mode. Tapping `1/x` again unwraps it back to superscript `x` (e.g. `9³` → `9^(1÷3)` → `9³`).
+- **Exponent Button Negative Base Auto-Wrap (Rules 4.1–4.4)** — When tapping `xʸ`:
+  - **4.1 (No `-`):** `5` → `5^`
+  - **4.2 (Unary `-` at start):** `-5` → `(-5)^`, `-(2+3)` → `(-(2+3))^`
+  - **4.3 (Unary `-` after operator):** `1+-5` → `1+(-5)^`, `2×-3` → `2×(-3)^`
+  - **4.4 (Binary subtraction):** `1-5` → `1-5^`, `(1-2×3)-5` → `(1-2×3)-5^`
+- **Unit Test Suite Expansion** — Expanded test coverage to 52 automated tests covering sign button enable/disable, 1/x unwrapping, exponent superscript reciprocals, and unary negative base auto-wrapping. Bumped `CACHE_VERSION` to `v7.4`.
+
+### v7.3 — 2026-08-24
+
+#### ⚡ 1/x Button Enable/Disable, (1÷x) Notation & Exponent Grouping Evaluation
+
+- **`1/x` Button Enable/Disable Logic** — Added `isReciprocalEnabled` getter and `setReciprocalButtonState()` in `uiRenderer.js`. The `1/x` button enables only when the trailing token is a number (digit/decimal) or `)` and in State B; disabled when empty, on operators, `(`, and during error states.
+- **`1/x` Notation Changed to `(1÷x)`** — Updated `inputReciprocal()` to insert `(1÷operand)` instead of wrapping with hidden `^(-1)` power tokens.
+- **Exponent Grouping Calculation Fix** — Modified `rawExpression` getter to automatically wrap contiguous `isExponent: true` runs following `^` in parentheses. Fixed expressions like `9^1/3` (where `1/3` is in exponent mode) calculating as `(9^1)/3 = 3`, now correctly evaluating as `9^(1/3) = 2.08008382305`. Bumped `CACHE_VERSION` to `v7.3`.
+
+### v7.2 — 2026-08-24
+
+#### 💡 Exponent Active Button State Indicator
+
+- **Exponent Active Visual Feedback** — Added `.is-exponent-active` styling to highlight the `xʸ` button in dark blue (`#004080`) while `exponentMode` is active, providing clear tactile visual feedback that subsequent digits will be entered as superscripts.
+- **Auto-Toggle & State Synchronization** — `setPowerButtonState()` dynamically applies active styling when `exponentMode` is true and removes it upon toggling off or evaluating. Bumped `CACHE_VERSION` to `v7.2`.
+
+### v7.1 — 2026-08-24
+
+#### 🔢 Exponent Mode Multi-Token Persistence & Exponent Toggle-Off
+
+- **Persistent Exponent Mode Across Operators & Parentheses** — Extended exponent entry mode so that operators (`+`, `-`, `×`, `÷`) and parentheses entered while in exponent mode are marked with `isExponent: true` and rendered as superscripts.
+- **xʸ Button Toggle-Off** — Pressing the `xʸ` button while already in exponent mode exits back to normal-sized base entry.
+- **Smart Backspace Exponent Recomputation** — Backspacing through exponent characters dynamically recomputes `exponentMode` based on the new trailing token stream. Bumped `CACHE_VERSION` to `v7.1`.
 
 ### v7.0 — 2026-08-23
 

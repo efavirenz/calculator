@@ -36,6 +36,19 @@ function makeToken(char, kind, { isExponent = false, hidden = false } = {}) {
   return { char, kind, isExponent, hidden };
 }
 
+function isEnclosedInParens(str) {
+  if (!str.startsWith('(') || !str.endsWith(')')) return false;
+  let depth = 0;
+  for (let k = 0; k < str.length; k += 1) {
+    if (str[k] === '(') depth += 1;
+    else if (str[k] === ')') {
+      depth -= 1;
+      if (depth === 0 && k < str.length - 1) return false;
+    }
+  }
+  return depth === 0;
+}
+
 export class CalculatorState {
   constructor() {
     this.reset();
@@ -68,9 +81,86 @@ export class CalculatorState {
     return this.tokens.length === 0;
   }
 
-  /** Raw string handed to the expression parser (ignores hidden flag). */
+  /**
+   * Determines whether the xʸ (power) button can be pressed.
+   * Enabled only when:
+   * 1. Actively in exponent mode (allows toggling off).
+   * 2. Displaying a completed result in State B.
+   * 3. The trailing token in the active expression is a number (digit or decimal) or closing parenthesis.
+   * @returns {boolean}
+   */
+  get isPowerEnabled() {
+    if (this.isError) return false;
+    if (this.exponentMode) return true; // Can always toggle off
+    if (this.displayState === DisplayState.RESULT) {
+      return this.resultString !== null;
+    }
+    if (this.isEmpty) return false;
+    const last = this.tokens[this.tokens.length - 1];
+    return Boolean(last && (last.kind === 'digit' || last.kind === 'decimal' || last.kind === 'rparen'));
+  }
+
+  /**
+   * Determines whether the 1/x (reciprocal) button can be pressed.
+   * Enabled only when:
+   * 1. Displaying a completed result in State B.
+   * 2. The trailing token in the active expression is a number (digit or decimal) or closing parenthesis.
+   * @returns {boolean}
+   */
+  get isReciprocalEnabled() {
+    if (this.isError) return false;
+    if (this.displayState === DisplayState.RESULT) {
+      return this.resultString !== null;
+    }
+    if (this.isEmpty) return false;
+    const last = this.tokens[this.tokens.length - 1];
+    return Boolean(last && (last.kind === 'digit' || last.kind === 'decimal' || last.kind === 'rparen'));
+  }
+
+  /**
+   * Determines whether the +/- (sign toggle) button can be pressed.
+   * Enabled only when:
+   * 1. Displaying a completed result in State B.
+   * 2. The trailing token in the active expression is a number (digit or decimal) or closing parenthesis.
+   * @returns {boolean}
+   */
+  get isSignEnabled() {
+    if (this.isError) return false;
+    if (this.displayState === DisplayState.RESULT) {
+      return this.resultString !== null;
+    }
+    if (this.isEmpty) return false;
+    const last = this.tokens[this.tokens.length - 1];
+    return Boolean(last && (last.kind === 'digit' || last.kind === 'decimal' || last.kind === 'rparen'));
+  }
+
+  /** Raw string handed to the expression parser (wraps exponent runs in parentheses). */
   get rawExpression() {
-    return this.tokens.map((t) => t.char).join('');
+    let result = '';
+    let i = 0;
+    while (i < this.tokens.length) {
+      const t = this.tokens[i];
+      result += t.char;
+      if (t.char === '^') {
+        let j = i + 1;
+        let expChars = '';
+        while (j < this.tokens.length && this.tokens[j].isExponent) {
+          expChars += this.tokens[j].char;
+          j += 1;
+        }
+        if (expChars.length > 0) {
+          if (isEnclosedInParens(expChars)) {
+            result += expChars;
+          } else {
+            result += `(${expChars})`;
+          }
+          i = j;
+          continue;
+        }
+      }
+      i += 1;
+    }
+    return result;
   }
 
   /**
@@ -215,43 +305,65 @@ export class CalculatorState {
   }
 
   /**
-   * Appends a pasted numeric string to the current expression.
-   * Strips thousands separators, whitespace, and currency symbols.
-   * Respects digit limits and decimal rules.
+   * Appends a pasted expression or numeric string to the current equation.
+   * Normalizes multiply/divide symbols, strips whitespace, commas, and currency symbols.
+   * Feeds tokens through existing input methods to respect digit limits, decimal rules, and syntax guards.
    * @param {string} raw - clipboard text
-   * @returns {boolean} true if a number was successfully pasted
+   * @returns {boolean} true if expression was successfully pasted
    */
-  pasteNumber(raw) {
+  pasteExpression(raw) {
     if (typeof raw !== 'string') return false;
 
     // Strip thousands separators (commas), whitespace, and common currency symbols
-    const cleaned = raw.replace(/[,\s$€£¥₹]/g, '');
+    // Also normalize text variants: * -> ×, / -> ÷, x/X -> ×
+    const cleaned = raw
+      .replace(/[,\s$€£¥₹]/g, '')
+      .replace(/\*/g, '×')
+      .replace(/\//g, '÷')
+      .replace(/(?<!\d)x(?!\d)/gi, '×');
+
     if (!cleaned) return false;
 
-    // Validate as numeric format (e.g. 123, -123, 123.45, -0.5, .5, -.5)
-    const match = cleaned.match(/^(-)?(\d*\.?\d+)$/);
-    if (!match) return false;
-
-    const isNegative = Boolean(match[1]);
-    const numberPart = match[2];
-    if (!numberPart || numberPart === '.') return false;
+    // Validate: must contain only allowed calculator characters
+    if (!/^[0-9.+\-×÷^()]+$/.test(cleaned)) return false;
+    // Must contain at least one digit
+    if (!/\d/.test(cleaned)) return false;
 
     this._clearErrorIfNeeded();
     this._startFreshIfShowingResult();
 
-    for (const ch of numberPart) {
-      if (ch === '.') {
-        this.inputDecimal();
-      } else if (ch >= '0' && ch <= '9') {
+    for (const ch of cleaned) {
+      if (ch >= '0' && ch <= '9') {
         this.inputDigit(ch);
+      } else if (ch === '.') {
+        this.inputDecimal();
+      } else if (ch === '+') {
+        this.inputOperator('+');
+      } else if (ch === '-') {
+        this.inputOperator('-');
+      } else if (ch === '×') {
+        this.inputOperator('×');
+      } else if (ch === '÷') {
+        this.inputOperator('÷');
+      } else if (ch === '^') {
+        this.inputPower();
+      } else if (ch === '(') {
+        this.inputOpenParen();
+      } else if (ch === ')') {
+        this.inputCloseParen();
       }
     }
 
-    if (isNegative) {
-      this.toggleSign();
-    }
-
     return true;
+  }
+
+  /**
+   * Backward-compatible alias for pasteExpression.
+   * @param {string} raw
+   * @returns {boolean}
+   */
+  pasteNumber(raw) {
+    return this.pasteExpression(raw);
   }
 
   /** Appends a binary operator: + - × ÷ */
@@ -265,12 +377,10 @@ export class CalculatorState {
       this.resultString = null;
     }
 
-    this.exponentMode = false;
-
     if (this.isEmpty) {
       if (op === '-') {
         // Leading unary minus is allowed ("start with a negative number").
-        this.tokens.push(makeToken('-', 'operator'));
+        this.tokens.push(makeToken('-', 'operator', { isExponent: this.exponentMode }));
       }
       return; // other leading operators are a no-op
     }
@@ -278,19 +388,26 @@ export class CalculatorState {
     const last = this.tokens[this.tokens.length - 1];
     if (last.kind === 'operator') {
       // Replace a trailing operator instead of stacking two in a row.
-      this.tokens[this.tokens.length - 1] = makeToken(op, 'operator');
+      this.tokens[this.tokens.length - 1] = makeToken(op, 'operator', { isExponent: this.exponentMode });
       return;
     }
 
-    this.tokens.push(makeToken(op, 'operator'));
+    this.tokens.push(makeToken(op, 'operator', { isExponent: this.exponentMode }));
   }
 
   /**
    * x^y button: inserts a hidden '^' operator and enters exponent-entry
    * mode so subsequent digits render as superscript.
+   * Pressing again while already in exponent mode exits back to normal.
    */
   inputPower() {
     this._clearErrorIfNeeded();
+
+    // Toggle OFF: pressing xʸ while already in exponent mode exits it
+    if (this.exponentMode) {
+      this.exponentMode = false;
+      return;
+    }
 
     if (this.displayState === DisplayState.RESULT) {
       this.tokens = this._tokensFromString(this.resultString);
@@ -303,12 +420,26 @@ export class CalculatorState {
     const last = this.tokens[this.tokens.length - 1];
     if (last.kind === 'operator') return; // no operand before an operator
 
+    // Auto-wrap unary minus before trailing operand into (-operand)
+    const start = this._findSingleOperandStart(this.tokens.length);
+    if (start !== null && this.tokens[start].kind === 'operator' && this.tokens[start].char === '-') {
+      const operandTokens = this.tokens.slice(start);
+      const beforeTokens = this.tokens.slice(0, start);
+      const isExp = Boolean(this.tokens[start]?.isExponent);
+      const wrappedBase = [
+        makeToken('(', 'lparen', { isExponent: isExp }),
+        ...operandTokens,
+        makeToken(')', 'rparen', { isExponent: isExp }),
+      ];
+      this.tokens = [...beforeTokens, ...wrappedBase];
+    }
+
     this.tokens.push(makeToken('^', 'operator', { hidden: true }));
     this.exponentMode = true;
   }
 
   /**
-   * 1/x button: rewraps the trailing operand as (operand)^(-1).
+   * 1/x button: wraps trailing operand as (1÷operand), or unwraps if already (1÷x).
    */
   inputReciprocal() {
     this._clearErrorIfNeeded();
@@ -324,20 +455,34 @@ export class CalculatorState {
 
     const operand = this.tokens.slice(range.start, range.end);
     const before = this.tokens.slice(0, range.start);
+    const isExp = Boolean(this.tokens[range.start]?.isExponent || this.exponentMode);
 
-    const wrapped = [
-      makeToken('(', 'lparen'),
-      ...operand,
-      makeToken(')', 'rparen'),
-      makeToken('^', 'operator', { hidden: true }),
-      makeToken('(', 'lparen', { hidden: true }),
-      makeToken('-', 'operator', { isExponent: true }),
-      makeToken('1', 'digit', { isExponent: true }),
-      makeToken(')', 'rparen', { hidden: true }),
-    ];
+    // Check if operand is already wrapped as (1÷x)
+    if (
+      operand.length >= 4 &&
+      operand[0].kind === 'lparen' &&
+      operand[1].kind === 'digit' &&
+      operand[1].char === '1' &&
+      operand[2].kind === 'operator' &&
+      operand[2].char === '÷' &&
+      operand[operand.length - 1].kind === 'rparen'
+    ) {
+      // Unwrap back to x
+      const unwrapped = operand.slice(3, operand.length - 1);
+      this.tokens = [...before, ...unwrapped];
+    } else {
+      // Wrap as (1÷operand)
+      const wrapped = [
+        makeToken('(', 'lparen', { isExponent: isExp }),
+        makeToken('1', 'digit', { isExponent: isExp }),
+        makeToken('÷', 'operator', { isExponent: isExp }),
+        ...operand,
+        makeToken(')', 'rparen', { isExponent: isExp }),
+      ];
+      this.tokens = [...before, ...wrapped];
+    }
 
-    this.tokens = [...before, ...wrapped];
-    this.exponentMode = false;
+    this.exponentMode = isExp;
   }
 
   /**
@@ -422,7 +567,7 @@ export class CalculatorState {
     // still marked as exponent content or follows a hidden '^' operator.
     const last = this.tokens[this.tokens.length - 1];
     this.exponentMode = Boolean(
-      last && ((last.kind === 'operator' && last.char === '^') || (last.isExponent && last.kind !== 'operator'))
+      last && ((last.kind === 'operator' && last.char === '^') || last.isExponent)
     );
   }
 

@@ -189,6 +189,18 @@ export class InputController {
         return; // respect the same disabled-state rule as the on-screen button
       }
 
+      if (mapped === 'power' && !this.state.isPowerEnabled) {
+        return; // respect the same disabled-state rule as the on-screen button
+      }
+
+      if (mapped === 'reciprocal' && !this.state.isReciprocalEnabled) {
+        return; // respect the same disabled-state rule as the on-screen button
+      }
+
+      if (mapped === 'sign' && !this.state.isSignEnabled) {
+        return; // respect the same disabled-state rule as the on-screen button
+      }
+
       if (mapped.startsWith('digit-')) {
         this.dispatch('digit', mapped.slice('digit-'.length));
       } else {
