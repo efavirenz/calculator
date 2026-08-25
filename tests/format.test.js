@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   tokensToPlainText,
+  tokensToClipboardText,
   stripLeadingZeros,
   addThousandsSeparators,
   formatExpressionWithCommas,
@@ -29,11 +30,55 @@ test('formatExpressionWithCommas formats numbers in math expressions', () => {
   assert.equal(formatExpressionWithCommas('(12345×6789)'), '(12,345×6,789)');
 });
 
-test('tokensToPlainText converts token streams accurately', () => {
+test('tokensToPlainText converts token streams accurately with superscripts', () => {
   const tokens = [
     { char: '2', kind: 'digit', isExponent: false, hidden: false },
     { char: '^', kind: 'operator', isExponent: false, hidden: true },
+    { char: '(', kind: 'lparen', isExponent: true, hidden: false },
+    { char: '1', kind: 'digit', isExponent: true, hidden: false },
+    { char: '+', kind: 'operator', isExponent: true, hidden: false },
+    { char: '3', kind: 'digit', isExponent: true, hidden: false },
+    { char: ')', kind: 'rparen', isExponent: true, hidden: false },
+  ];
+  assert.equal(tokensToPlainText(tokens), '2⁽¹⁺³⁾');
+});
+
+test('tokensToClipboardText converts token streams to ^(...) format for clipboard', () => {
+  // 2^(1+3)
+  const tokens1 = [
+    { char: '2', kind: 'digit', isExponent: false, hidden: false },
+    { char: '^', kind: 'operator', isExponent: false, hidden: true },
+    { char: '1', kind: 'digit', isExponent: true, hidden: false },
+    { char: '+', kind: 'operator', isExponent: true, hidden: false },
     { char: '3', kind: 'digit', isExponent: true, hidden: false },
   ];
-  assert.equal(tokensToPlainText(tokens), '2³');
+  assert.equal(tokensToClipboardText(tokens1), '2^(1+3)');
+
+  // 2^(5)
+  const tokens2 = [
+    { char: '2', kind: 'digit', isExponent: false, hidden: false },
+    { char: '^', kind: 'operator', isExponent: false, hidden: true },
+    { char: '5', kind: 'digit', isExponent: true, hidden: false },
+  ];
+  assert.equal(tokensToClipboardText(tokens2), '2^(5)');
+
+  // 9^(1÷3)
+  const tokens3 = [
+    { char: '9', kind: 'digit', isExponent: false, hidden: false },
+    { char: '^', kind: 'operator', isExponent: false, hidden: true },
+    { char: '(', kind: 'lparen', isExponent: true, hidden: false },
+    { char: '1', kind: 'digit', isExponent: true, hidden: false },
+    { char: '÷', kind: 'operator', isExponent: true, hidden: false },
+    { char: '3', kind: 'digit', isExponent: true, hidden: false },
+    { char: ')', kind: 'rparen', isExponent: true, hidden: false },
+  ];
+  assert.equal(tokensToClipboardText(tokens3), '9^(1÷3)');
+
+  // Plain expression without exponents: 5+3
+  const tokens4 = [
+    { char: '5', kind: 'digit', isExponent: false, hidden: false },
+    { char: '+', kind: 'operator', isExponent: false, hidden: false },
+    { char: '3', kind: 'digit', isExponent: false, hidden: false },
+  ];
+  assert.equal(tokensToClipboardText(tokens4), '5+3');
 });

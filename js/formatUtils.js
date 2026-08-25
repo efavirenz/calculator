@@ -20,7 +20,87 @@ const SUPERSCRIPT_MAP = {
   9: '⁹',
   '-': '⁻',
   '.': '˙',
+  '+': '⁺',
+  '(': '⁽',
+  ')': '⁾',
 };
+
+function isEnclosedInParensString(str) {
+  if (!str.startsWith('(') || !str.endsWith(')')) return false;
+  let depth = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    if (str[i] === '(') depth += 1;
+    else if (str[i] === ')') {
+      depth -= 1;
+      if (depth === 0 && i < str.length - 1) return false;
+    }
+  }
+  return depth === 0;
+}
+
+/**
+ * Converts a token stream into an expression string formatted with ^(...)
+ * for exponents, suitable for copying to clipboard.
+ * Examples:
+ *   [2, ^, 1, +, 3] -> "2^(1+3)"
+ *   [2, ^, 5] -> "2^(5)"
+ *   [9, ^, (, 1, ÷, 3, )] -> "9^(1÷3)"
+ *   [5, +, 3] -> "5+3"
+ * @param {Array<{char:string, isExponent:boolean, hidden:boolean, kind:string}>} tokens
+ * @returns {string}
+ */
+export function tokensToClipboardText(tokens) {
+  if (!Array.isArray(tokens) || tokens.length === 0) return '';
+  let out = '';
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token.hidden && token.char === '^') {
+      i += 1;
+      let expChars = '';
+      while (i < tokens.length && tokens[i].isExponent) {
+        if (!tokens[i].hidden) {
+          expChars += tokens[i].char;
+        }
+        i += 1;
+      }
+      if (expChars.length > 0) {
+        if (expChars.startsWith('(') && expChars.endsWith(')') && isEnclosedInParensString(expChars)) {
+          out += `^${expChars}`;
+        } else {
+          out += `^(${expChars})`;
+        }
+      } else {
+        out += '^';
+      }
+      continue;
+    }
+
+    if (token.hidden) {
+      i += 1;
+      continue;
+    }
+
+    if (!token.isExponent && (token.kind === 'digit' || token.kind === 'decimal')) {
+      let numStr = '';
+      while (
+        i < tokens.length &&
+        !tokens[i].hidden &&
+        !tokens[i].isExponent &&
+        (tokens[i].kind === 'digit' || tokens[i].kind === 'decimal')
+      ) {
+        numStr += tokens[i].char;
+        i += 1;
+      }
+      out += stripLeadingZeros(numStr);
+      continue;
+    }
+
+    out += token.char;
+    i += 1;
+  }
+  return out;
+}
 
 /**
  * @param {Array<{char:string, isExponent:boolean, hidden:boolean, kind:string}>} tokens

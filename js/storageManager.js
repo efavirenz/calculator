@@ -44,6 +44,10 @@ export function saveHistory(entries) {
     window.localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
     return true;
   } catch (err) {
+    if (Array.isArray(entries) && entries.length > 5) {
+      // Auto-eviction fallback: retry with truncated history
+      return saveHistory(entries.slice(0, Math.floor(entries.length / 2)));
+    }
     console.warn('Failed to save history to storage:', err);
     return false;
   }

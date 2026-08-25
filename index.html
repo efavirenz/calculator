@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
   <title>Calculator</title>
   <meta name="description" content="An iPhone-style calculator, installable as a Progressive Web App." />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self';" />
 
   <!-- PWA manifest (relative path: works on GitHub Pages subpaths) -->
   <link rel="manifest" href="./manifest.json" />
@@ -41,7 +41,7 @@
       </button>
       <div class="topbar-actions">
         <button id="install-btn" class="install-button" type="button" hidden>Install</button>
-        <button id="version-badge" class="version-badge" type="button" title="Tap to check for updates">v7.4</button>
+        <button id="version-badge" class="version-badge" type="button" title="Tap to check for updates">v7.6</button>
       </div>
     </header>
 

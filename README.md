@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v7.0-blue)
+![version](https://img.shields.io/badge/version-v7.6-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -218,7 +218,7 @@ Key: `calculator.history.v1` → JSON array of:
   icons) on `install`, using a **cache-first** strategy with a network
   fallback for anything else same-origin (navigational requests fallback to
   `./index.html` on network failure).
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v6.9`. The `activate`
+- **Versioned cache**: `CACHE_NAME = calculator-cache-v7.6`. The `activate`
   handler deletes any cache whose name starts with `calculator-cache-` and
   doesn't match the current version. **Release process:** bump
   `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
@@ -323,6 +323,30 @@ Per the "most iOS-like behavior, document the decision" rule:
    exponent mode back to base level.
 
 ## 15. Version History
+
+### v7.6 — 2026-08-25
+
+#### 🛡️ Comprehensive Audit Remediation & Calculation Precision Overhaul
+
+- **Negative Exponent Entry Fix (`BUG-NEW-01`)** — Fixed critical bug where pressing `-` directly following `xʸ` (`inputPower()`) overwrote the hidden `^` operator, mutating $2^{-3}$ into $2 - 3 = -1$. Now correctly sets negative exponent mode and evaluates $2^{-3} = 0.125$.
+- **Scientific Notation Re-Tokenization & Precision (`BUG-NEW-02`, `BUG-005`)** — Overhauled `_tokensFromString()` to preserve mathematical precision on extreme scientific numbers. Numbers $\ge 10^{21}$ and $< 10^{-15}$ are now converted into structured base &times; 10<sup>exp</sup> token streams (e.g. `1×10^(25)`), eliminating digit truncation/corruption (such as $10^{25}+1$ becoming $125+1=126$) and underflow to `0` for numbers $< 10^{-20}$.
+- **Keyboard Shortcut Modifier Bypass (`BUG-001`)** — Added modifier key checks (`metaKey`, `ctrlKey`, `altKey`) at the top of `InputController.attachKeyboard()` so browser shortcuts (`Cmd+C`, `Ctrl+C`, `Cmd+R`, `Cmd+X`, `Cmd+Shift+R`) pass through without accidentally triggering clear, reciprocal, or multiplication.
+- **Paste Multiplication Expression Normalization (`BUG-002`)** — Replaced inverted negative lookaround regex with a global case-insensitive `/x/gi` replace, enabling pasting expressions with `x` or `X` like `2x3` and `100X5.5`.
+- **Parentheses Token Stream Synchronization (`BUG-003`)** — `evaluate()` now pushes missing closing `)` tokens directly to `this.tokens`, ensuring State B upper display and history persist balanced expressions.
+- **Compound Reciprocal Validation (`BUG-004`)** — Added `isSingleAtomicOperand()` validation in `inputReciprocal()` to prevent corrupting compound expressions like `(1÷5+2)` into `5+2`.
+- **Operator Following Open Parenthesis Guard (`BUG-006`)** — Prevented invalid binary operators (`+`, `×`, `÷`) directly following `(`, permitting only unary minus `-`.
+- **PWA Service Worker ReadyState Lifecycle (`REL-001`)** — Added `document.readyState === 'complete'` check in `pwaBootstrap.js` to eliminate race conditions when scripts execute after window load.
+- **History LocalStorage Quota Recovery (`REL-002`)** — Added automatic halving eviction retry in `saveHistory()` to prevent data loss on storage quota limits.
+- **Tablet Landscape Responsive Layout (`PERF-001`)** — Broadened landscape media query to support tablet viewports with a centered `960px` max-width card.
+- **Accessibility & CSP Hardening (`UX-NEW-01`, `SEC-NEW-01`)** — Added dynamic `aria-expanded` toggle on `#hamburger-btn` and hardened CSP with `object-src 'none'; base-uri 'self'`.
+- **Automated Test Suite Expansion (`TEST-001`)** — Expanded test coverage to 64 automated tests (`node --test`), covering syntax errors, direct parser validation, extreme scientific bounds, and negative power entry. Bumped `CACHE_VERSION` to `v7.6`.
+
+### v7.5 — 2026-08-25
+
+#### 📋 Clipboard Text Serialization & Multi-Token Exponent Clipboard Formats
+
+- **Clipboard Expression Export (`tokensToClipboardText`)** — Added structured clipboard export converting superscript exponents into standard `base^(exp)` notation (e.g. `2^(1+3)`), compatible with external tools, spreadsheets, and equation solvers.
+- **Multi-Token Exponent Paste Support** — Enhanced `pasteExpression` to parse `^(...)` exponent groups and automatically turn off `exponentMode` upon closing parenthesis. Bumped `CACHE_VERSION` to `v7.5`.
 
 ### v7.4 — 2026-08-24
 

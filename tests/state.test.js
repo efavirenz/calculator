@@ -777,3 +777,145 @@ test('exponent button handles unary minus and binary subtraction according to ru
   s4b.inputDigit('2');
   assert.equal(s4b.evaluate().result, '-30');
 });
+
+test('pasteExpression parses ^(...) exponent groups and turns off exponentMode after closing paren', () => {
+  // Example 1: 2^(1+3)
+  const state1 = new CalculatorState();
+  assert.equal(state1.pasteExpression('2^(1+3)'), true);
+  assert.equal(state1.rawExpression, '2^(1+3)');
+  assert.equal(state1.exponentMode, false);
+  // Base token '2' is not exponent
+  assert.equal(state1.tokens[0].char, '2');
+  assert.equal(state1.tokens[0].isExponent, false);
+  // Tokens inside (1+3) are all isExponent: true
+  const expTokens1 = state1.tokens.slice(2);
+  assert.equal(expTokens1.map(t => t.char).join(''), '(1+3)');
+  for (const t of expTokens1) {
+    assert.equal(t.isExponent, true);
+  }
+  // Evaluates to 2^4 = 16
+  assert.equal(state1.evaluate().result, '16');
+
+  // Example 2: 2^(5)
+  const state2 = new CalculatorState();
+  assert.equal(state2.pasteExpression('2^(5)'), true);
+  assert.equal(state2.rawExpression, '2^(5)');
+  assert.equal(state2.exponentMode, false);
+  assert.equal(state2.tokens[0].char, '2');
+  assert.equal(state2.tokens[0].isExponent, false);
+  const expTokens2 = state2.tokens.slice(2);
+  assert.equal(expTokens2.map(t => t.char).join(''), '(5)');
+  for (const t of expTokens2) {
+    assert.equal(t.isExponent, true);
+  }
+  assert.equal(state2.evaluate().result, '32');
+
+  // Paste 2^(1+3)+4 -> ensures +4 is normal-size (not exponent)
+  const state3 = new CalculatorState();
+  assert.equal(state3.pasteExpression('2^(1+3)+4'), true);
+  assert.equal(state3.rawExpression, '2^(1+3)+4');
+  assert.equal(state3.exponentMode, false);
+  const lastTokens = state3.tokens.slice(-2);
+  assert.equal(lastTokens[0].char, '+');
+  assert.equal(lastTokens[0].isExponent, false);
+  assert.equal(lastTokens[1].char, '4');
+  assert.equal(lastTokens[1].isExponent, false);
+  assert.equal(state3.evaluate().result, '20');
+});
+
+test('pasteExpression handles standard 2x3 and 100X5.5 multiplication (BUG-002)', () => {
+  const state1 = new CalculatorState();
+  assert.equal(state1.pasteExpression('2x3'), true);
+  assert.equal(state1.rawExpression, '2×3');
+  assert.equal(state1.evaluate().result, '6');
+
+  const state2 = new CalculatorState();
+  assert.equal(state2.pasteExpression('100X5.5'), true);
+  assert.equal(state2.rawExpression, '100×5.5');
+  assert.equal(state2.evaluate().result, '550');
+});
+
+test('evaluate updates tokens array with auto-closed parentheses (BUG-003)', () => {
+  const state = new CalculatorState();
+  state.inputOpenParen();
+  state.inputDigit('5');
+  state.inputOperator('+');
+  state.inputDigit('3');
+  assert.equal(state.parenBalance, 1);
+
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '8');
+  assert.equal(state.parenBalance, 0);
+  assert.equal(state.tokens[state.tokens.length - 1].kind, 'rparen');
+  assert.equal(state.tokens[state.tokens.length - 1].char, ')');
+});
+
+test('inputReciprocal wraps compound expression starting with 1÷ rather than corrupting it (BUG-004)', () => {
+  const state = new CalculatorState();
+  state.inputOpenParen();
+  state.inputDigit('1');
+  state.inputOperator('÷');
+  state.inputDigit('5');
+  state.inputOperator('+');
+  state.inputDigit('2');
+  state.inputCloseParen();
+
+  assert.equal(state.rawExpression, '(1÷5+2)');
+  state.inputReciprocal();
+  assert.equal(state.rawExpression, '(1÷(1÷5+2))');
+
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  // (1 / 2.2) ~ 0.454545454545
+  assert.equal(outcome.result, '0.454545454545');
+});
+
+test('inputOperator ignores binary operators directly following open parenthesis (BUG-006)', () => {
+  const state = new CalculatorState();
+  state.inputOpenParen();
+  state.inputOperator('+'); // should be ignored
+  assert.equal(state.rawExpression, '(');
+  state.inputOperator('×'); // should be ignored
+  assert.equal(state.rawExpression, '(');
+  state.inputOperator('÷'); // should be ignored
+  assert.equal(state.rawExpression, '(');
+
+  state.inputOperator('-'); // unary minus allowed
+  assert.equal(state.rawExpression, '(-');
+  state.inputDigit('5');
+  state.inputCloseParen();
+  assert.equal(state.rawExpression, '(-5)');
+  assert.equal(state.evaluate().result, '-5');
+});
+
+test('inputOperator unary minus directly after power button creates negative exponent without replacing power (BUG-NEW-01)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('2');
+  state.inputPower();
+  state.inputOperator('-'); // should be unary minus inside exponent
+  state.inputDigit('3');
+
+  assert.equal(state.rawExpression, '2^(-3)');
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '0.125');
+});
+
+test('_tokensFromString preserves extreme large and small scientific notation in chain calculation (BUG-NEW-02 & BUG-005)', () => {
+  const state1 = new CalculatorState();
+  state1.resultString = '1e+25';
+  state1.displayState = DisplayState.RESULT;
+  state1.inputOperator('+');
+  state1.inputDigit('1');
+  assert.equal(state1.rawExpression, '1×10^(25)+1');
+  assert.equal(state1.evaluate().result, '1e+25');
+
+  const state2 = new CalculatorState();
+  state2.resultString = '1e-22';
+  state2.displayState = DisplayState.RESULT;
+  state2.inputOperator('+');
+  state2.inputDigit('1');
+  assert.equal(state2.rawExpression, '1×10^(-22)+1');
+  assert.equal(state2.evaluate().result, '1');
+});

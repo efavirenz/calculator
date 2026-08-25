@@ -497,10 +497,12 @@ button {
   }
 }
 
-/* ---------------------------------- Landscape mode (e.g. iPhone) ---------------------------------- */
+/* ---------------------------------- Landscape mode (e.g. iPhone, iPad) ---------------------------------- */
 
-@media (orientation: landscape) and (max-height: 550px) {
+@media (orientation: landscape) {
   .app {
+    max-width: 960px;
+    margin: 0 auto;
     padding-top: max(var(--safe-top), 4px);
     padding-bottom: max(var(--safe-bottom), 4px);
     padding-left: max(var(--safe-left), 12px);

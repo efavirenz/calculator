@@ -123,7 +123,7 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = resultString !== null ? addThousandsSeparators(resultString) : '';
   } else {
-    const isLandscape = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(orientation: landscape) and (max-height: 550px)').matches;
+    const isLandscape = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(orientation: landscape)').matches;
     if (isLandscape) {
       upperEl.style.display = '';
       upperEl.style.visibility = 'hidden';
@@ -228,7 +228,11 @@ export function renderHistory(entries, onSelect) {
 
     const exprEl = document.createElement('div');
     exprEl.className = 'history-expression';
-    exprEl.textContent = formatExpressionWithCommas(entry.expression);
+    if (Array.isArray(entry.tokens) && entry.tokens.length > 0) {
+      exprEl.appendChild(renderTokensToFragment(entry.tokens));
+    } else {
+      exprEl.textContent = formatExpressionWithCommas(entry.expression);
+    }
 
     const resultEl = document.createElement('div');
     resultEl.className = 'history-result';
@@ -264,10 +268,18 @@ function formatTimestamp(ms) {
 export function toggleHistoryPanel(open) {
   const panel = document.querySelector(SELECTORS.historyPanel);
   const overlay = document.querySelector(SELECTORS.historyOverlay);
-  panel.classList.toggle('is-open', open);
-  overlay.classList.toggle('is-open', open);
-  panel.setAttribute('aria-hidden', String(!open));
-  if (open) {
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  if (panel) {
+    panel.classList.toggle('is-open', open);
+    panel.setAttribute('aria-hidden', String(!open));
+  }
+  if (overlay) {
+    overlay.classList.toggle('is-open', open);
+  }
+  if (hamburgerBtn) {
+    hamburgerBtn.setAttribute('aria-expanded', String(open));
+  }
+  if (open && panel) {
     panel.querySelector('.history-close')?.focus();
   }
 }

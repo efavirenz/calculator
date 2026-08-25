@@ -10,7 +10,7 @@
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
-  window.addEventListener('load', () => {
+  const register = () => {
     navigator.serviceWorker
       .register('./service-worker.js', { scope: './' })
       .then((reg) => {
@@ -20,7 +20,13 @@ export function registerServiceWorker() {
       .catch((err) => {
         console.warn('Service worker registration failed:', err);
       });
-  });
+  };
+
+  if (document.readyState === 'complete') {
+    register();
+  } else {
+    window.addEventListener('load', register);
+  }
 }
 
 /**

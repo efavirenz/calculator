@@ -49,6 +49,33 @@ function isEnclosedInParens(str) {
   return depth === 0;
 }
 
+function isSingleAtomicOperand(tokens) {
+  if (!tokens || tokens.length === 0) return false;
+  let allNumeric = true;
+  for (let k = 0; k < tokens.length; k += 1) {
+    const t = tokens[k];
+    if (t.kind === 'digit' || t.kind === 'decimal' || (k === 0 && t.kind === 'operator' && t.char === '-')) {
+      continue;
+    }
+    allNumeric = false;
+    break;
+  }
+  if (allNumeric) return true;
+
+  if (tokens[0].kind === 'lparen' && tokens[tokens.length - 1].kind === 'rparen') {
+    let depth = 0;
+    for (let k = 0; k < tokens.length; k += 1) {
+      if (tokens[k].kind === 'lparen') depth += 1;
+      else if (tokens[k].kind === 'rparen') {
+        depth -= 1;
+        if (depth === 0 && k < tokens.length - 1) return false;
+      }
+    }
+    return depth === 0;
+  }
+  return false;
+}
+
 export class CalculatorState {
   constructor() {
     this.reset();
@@ -320,7 +347,7 @@ export class CalculatorState {
       .replace(/[,\s$€£¥₹]/g, '')
       .replace(/\*/g, '×')
       .replace(/\//g, '÷')
-      .replace(/(?<!\d)x(?!\d)/gi, '×');
+      .replace(/x/gi, '×');
 
     if (!cleaned) return false;
 
@@ -332,7 +359,23 @@ export class CalculatorState {
     this._clearErrorIfNeeded();
     this._startFreshIfShowingResult();
 
+    let expectExpParen = false;
+    let inExpGroup = false;
+    let expParenDepth = 0;
+
     for (const ch of cleaned) {
+      if (expectExpParen) {
+        if (ch === '(') {
+          inExpGroup = true;
+          expParenDepth = 1;
+        }
+        expectExpParen = false;
+      } else if (inExpGroup) {
+        if (ch === '(') {
+          expParenDepth += 1;
+        }
+      }
+
       if (ch >= '0' && ch <= '9') {
         this.inputDigit(ch);
       } else if (ch === '.') {
@@ -347,10 +390,18 @@ export class CalculatorState {
         this.inputOperator('÷');
       } else if (ch === '^') {
         this.inputPower();
+        expectExpParen = true;
       } else if (ch === '(') {
         this.inputOpenParen();
       } else if (ch === ')') {
         this.inputCloseParen();
+        if (inExpGroup) {
+          expParenDepth -= 1;
+          if (expParenDepth <= 0) {
+            inExpGroup = false;
+            this.exponentMode = false;
+          }
+        }
       }
     }
 
@@ -386,6 +437,20 @@ export class CalculatorState {
     }
 
     const last = this.tokens[this.tokens.length - 1];
+    if (last.kind === 'lparen') {
+      if (op === '-') {
+        this.tokens.push(makeToken('-', 'operator', { isExponent: this.exponentMode }));
+      }
+      return;
+    }
+
+    if (last.kind === 'operator' && last.char === '^') {
+      if (op === '-') {
+        this.tokens.push(makeToken('-', 'operator', { isExponent: true }));
+      }
+      return;
+    }
+
     if (last.kind === 'operator') {
       // Replace a trailing operator instead of stacking two in a row.
       this.tokens[this.tokens.length - 1] = makeToken(op, 'operator', { isExponent: this.exponentMode });
@@ -457,7 +522,7 @@ export class CalculatorState {
     const before = this.tokens.slice(0, range.start);
     const isExp = Boolean(this.tokens[range.start]?.isExponent || this.exponentMode);
 
-    // Check if operand is already wrapped as (1÷x)
+    // Check if operand is already wrapped as (1÷x) where x is a single atomic operand
     if (
       operand.length >= 4 &&
       operand[0].kind === 'lparen' &&
@@ -465,7 +530,8 @@ export class CalculatorState {
       operand[1].char === '1' &&
       operand[2].kind === 'operator' &&
       operand[2].char === '÷' &&
-      operand[operand.length - 1].kind === 'rparen'
+      operand[operand.length - 1].kind === 'rparen' &&
+      isSingleAtomicOperand(operand.slice(3, operand.length - 1))
     ) {
       // Unwrap back to x
       const unwrapped = operand.slice(3, operand.length - 1);
@@ -621,11 +687,14 @@ export class CalculatorState {
 
     if (this.isEmpty) return;
 
-    let expr = this.rawExpression;
     const balance = this.parenBalance;
     if (balance > 0) {
-      expr += ')'.repeat(balance);
+      for (let b = 0; b < balance; b += 1) {
+        this.tokens.push(makeToken(')', 'rparen', { isExponent: false }));
+      }
     }
+
+    const expr = this.rawExpression;
 
     try {
       const result = evaluateExpression(expr);
@@ -660,26 +729,60 @@ export class CalculatorState {
 
   /** Rebuilds a plain token array from a formatted result string. */
   _tokensFromString(str) {
-    if (!str) return [];
+    if (!str || typeof str !== 'string') return [];
+    const num = Number(str);
+    if (!Number.isFinite(num)) return [];
+
     let formattedStr = str;
     if (str.includes('e') || str.includes('E')) {
-      const num = Number(str);
-      if (Number.isFinite(num)) {
-        const absNum = Math.abs(num);
+      const absNum = Math.abs(num);
+      if (absNum >= 1e-15 && absNum < 1e20) {
         const decimals = absNum < 1 ? 20 : Math.max(0, 12 - Math.floor(Math.log10(absNum)) - 1);
-        formattedStr = num.toFixed(Math.min(decimals, 20));
-        if (formattedStr.includes('.')) {
-          formattedStr = formattedStr.replace(/\.?0+$/, '');
+        const fixed = num.toFixed(Math.min(decimals, 20));
+        const cleaned = fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed;
+        if (!cleaned.includes('e') && cleaned !== '0' && cleaned !== '-0') {
+          formattedStr = cleaned;
         }
       }
     }
 
+    if (!formattedStr.includes('e') && !formattedStr.includes('E')) {
+      const tokens = [];
+      for (const ch of formattedStr) {
+        if (ch === '-') tokens.push(makeToken('-', 'operator'));
+        else if (ch === '.') tokens.push(makeToken('.', 'decimal'));
+        else if (ch >= '0' && ch <= '9') tokens.push(makeToken(ch, 'digit'));
+      }
+      return tokens;
+    }
+
+    const [mantissaStr, expStr] = formattedStr.toLowerCase().split('e');
+    const expNum = parseInt(expStr, 10);
+    if (Number.isNaN(expNum)) return [];
+
     const tokens = [];
-    for (const ch of formattedStr) {
-      if (ch === '-') tokens.push(makeToken('-', 'operator'));
-      else if (ch === '.') tokens.push(makeToken('.', 'decimal'));
+    if (mantissaStr.startsWith('-')) {
+      tokens.push(makeToken('-', 'operator'));
+    }
+    const unsignedMantissa = mantissaStr.replace(/^-/, '');
+    for (const ch of unsignedMantissa) {
+      if (ch === '.') tokens.push(makeToken('.', 'decimal'));
       else if (ch >= '0' && ch <= '9') tokens.push(makeToken(ch, 'digit'));
     }
+
+    tokens.push(makeToken('×', 'operator'));
+    tokens.push(makeToken('1', 'digit'));
+    tokens.push(makeToken('0', 'digit'));
+    tokens.push(makeToken('^', 'operator', { hidden: true }));
+
+    const expAbsStr = String(Math.abs(expNum));
+    if (expNum < 0) {
+      tokens.push(makeToken('-', 'operator', { isExponent: true }));
+    }
+    for (const ch of expAbsStr) {
+      tokens.push(makeToken(ch, 'digit', { isExponent: true }));
+    }
+
     return tokens;
   }
 

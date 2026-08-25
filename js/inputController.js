@@ -169,6 +169,11 @@ export class InputController {
   /** Attaches the global keyboard listener. */
   attachKeyboard(target = window) {
     target.addEventListener('keydown', (event) => {
+      // Allow browser and OS shortcuts (Cmd+C, Ctrl+V, Cmd+R, Cmd+X, etc.)
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
       // Ignore keystrokes while focus is inside a text input/dialog control, or when modal is open.
       if (event.target && event.target.closest && event.target.closest('input, textarea, dialog')) {
         return;

@@ -10,7 +10,7 @@
 import { CalculatorState, DisplayState } from './calculatorState.js';
 import { HistoryManager } from './historyManager.js';
 import { InputController } from './inputController.js';
-import { tokensToPlainText } from './formatUtils.js';
+import { tokensToPlainText, tokensToClipboardText } from './formatUtils.js';
 import {
   renderDisplay,
   setCloseParenEnabled,
@@ -132,7 +132,14 @@ function main() {
       hideClipboardMenu();
 
       if (action === 'copy') {
-        const textToCopy = lowerDisplayEl.textContent ? lowerDisplayEl.textContent.trim() : '';
+        let textToCopy = '';
+        if (state.displayState === DisplayState.RESULT && state.resultString !== null) {
+          textToCopy = state.resultString;
+        } else if (state.tokens.length > 0) {
+          textToCopy = tokensToClipboardText(state.tokens);
+        } else {
+          textToCopy = '0';
+        }
         if (!textToCopy) return;
         const copied = await copyToClipboard(textToCopy);
         if (copied) {

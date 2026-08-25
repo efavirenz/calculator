@@ -78,3 +78,27 @@ test('Unary minus following binary operators', () => {
   assert.equal(evaluateExpression('10+-4'), '6');
   assert.equal(evaluateExpression('12÷-3'), '-4');
 });
+
+test('Unclosed parenthesis direct evaluateExpression call throws ExpressionError (TEST-001)', () => {
+  assert.throws(
+    () => evaluateExpression('(2+3'),
+    (err) => err instanceof ExpressionError && err.message === 'Unmatched opening parenthesis'
+  );
+});
+
+test('Consecutive invalid operators direct call throws ExpressionError (TEST-001)', () => {
+  assert.throws(
+    () => evaluateExpression('5+×3'),
+    (err) => err instanceof ExpressionError && err.message === 'Invalid expression'
+  );
+});
+
+test('Large exponent scientific evaluation (TEST-001)', () => {
+  const result = evaluateExpression('10^25');
+  assert.equal(result, '1e+25');
+});
+
+test('Small exponent scientific evaluation (TEST-001)', () => {
+  const result = evaluateExpression('10^-22');
+  assert.equal(result, '1e-22');
+});
