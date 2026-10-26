@@ -56,17 +56,48 @@ function main() {
   const state = new CalculatorState();
   const history = new HistoryManager();
 
-  // Prevent iOS Safari overscroll rubber-banding except on scrollable elements (history list)
+  // Prevent iOS Safari overscroll rubber-banding except on scrollable elements (history list, display lines)
   document.addEventListener(
     'touchmove',
     (event) => {
-      if (event.target.closest('.history-list')) {
+      if (event.target.closest('.history-list, .display-line')) {
         return;
       }
       event.preventDefault();
     },
     { passive: false }
   );
+
+  function addSwipeSafeClickListener(el, onClick) {
+    if (!el) return;
+    let startX = 0;
+    let startY = 0;
+    let didMove = false;
+
+    el.addEventListener('pointerdown', (e) => {
+      startX = e.clientX;
+      startY = e.clientY;
+      didMove = false;
+    });
+
+    el.addEventListener('pointermove', (e) => {
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) {
+        didMove = true;
+      }
+    });
+
+    el.addEventListener('pointercancel', () => {
+      didMove = true;
+    });
+
+    el.addEventListener('click', (e) => {
+      if (didMove) {
+        didMove = false;
+        return;
+      }
+      onClick(e);
+    });
+  }
 
   function render() {
     renderDisplay({
@@ -110,7 +141,7 @@ function main() {
   controller.attachKeyboard(window);
 
   const upperDisplayEl = document.getElementById('upper-display');
-  upperDisplayEl.addEventListener('click', () => {
+  addSwipeSafeClickListener(upperDisplayEl, () => {
     state.recallExpressionToEntry();
     render();
   });
@@ -119,7 +150,7 @@ function main() {
   const lowerDisplayEl = document.getElementById('lower-display');
   const clipboardMenu = document.getElementById('clipboard-menu');
 
-  lowerDisplayEl.addEventListener('click', () => {
+  addSwipeSafeClickListener(lowerDisplayEl, () => {
     showClipboardMenu();
   });
 

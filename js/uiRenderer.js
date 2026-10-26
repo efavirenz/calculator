@@ -112,6 +112,8 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
     lowerEl.classList.add('is-error');
     autoShrinkToFit(lowerEl);
     autoShrinkToFit(upperEl);
+    scrollToDisplayEnd(upperEl);
+    scrollToDisplayEnd(lowerEl);
     return;
   }
 
@@ -137,8 +139,25 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
   }
 
   autoShrinkToFit(lowerEl);
+  scrollToDisplayEnd(lowerEl);
   if (displayState === 'B') {
     autoShrinkToFit(upperEl);
+    scrollToDisplayEnd(upperEl);
+  }
+}
+
+/**
+ * Scrolls a display line horizontally to its end so the most recent
+ * input is visible.
+ * @param {HTMLElement|null} el
+ */
+export function scrollToDisplayEnd(el) {
+  if (!el) return;
+  el.scrollLeft = el.scrollWidth;
+  if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(() => {
+      el.scrollLeft = el.scrollWidth;
+    });
   }
 }
 

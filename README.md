@@ -3,7 +3,7 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v7.6-blue)
+![version](https://img.shields.io/badge/version-v7.7-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -218,7 +218,7 @@ Key: `calculator.history.v1` → JSON array of:
   icons) on `install`, using a **cache-first** strategy with a network
   fallback for anything else same-origin (navigational requests fallback to
   `./index.html` on network failure).
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v7.6`. The `activate`
+- **Versioned cache**: `CACHE_NAME = calculator-cache-v7.7`. The `activate`
   handler deletes any cache whose name starts with `calculator-cache-` and
   doesn't match the current version. **Release process:** bump
   `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
@@ -323,6 +323,14 @@ Per the "most iOS-like behavior, document the decision" rule:
    exponent mode back to base level.
 
 ## 15. Version History
+
+### v7.7 — 2026-10-26
+
+#### 📱 Long Equation Display Overflow & Horizontal Swipe Support
+
+- **Display Overflow Scrolling & Swipe Gestures** — Added `overflow-x: auto`, `touch-action: pan-x`, and `-webkit-overflow-scrolling: touch` with hidden scrollbars to `.display-line` in `style.css`.
+- **End-Anchored Display Position (State A & State B)** — Added `scrollToDisplayEnd()` in `uiRenderer.js`, ensuring long expressions automatically show the ending part (most recent input) in the lower display during entry (State A) and in the upper display upon evaluation (State B), while allowing users to swipe horizontally to inspect hidden parts.
+- **Swipe-Safe Click Protection & iOS Gesture Unblocking** — Allowed `touchmove` on `.display-line` in `app.js` to enable smooth swipe gestures on iOS Safari, and wrapped display click listeners with `addSwipeSafeClickListener` so swiping to inspect expressions never accidentally triggers expression recall or clipboard context menu. Bumped `CACHE_VERSION` to `v7.7`.
 
 ### v7.6 — 2026-08-25
 
