@@ -4,7 +4,7 @@ shipped app -- run locally (`python3 generate_icons.py`) whenever the
 icon design needs to be regenerated; the output PNGs are what actually
 get committed/deployed.
 """
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import os
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), "icons")

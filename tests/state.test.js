@@ -40,6 +40,71 @@ test('Trailing operator auto-trimming on evaluation', () => {
   assert.equal(outcome.result, '61');
 });
 
+test('Paste parses unary minus transactionally and preserves binary operators', () => {
+  for (const [input, expected] of [['2×-3', '-6'], ['2÷-3', '-0.666666666667'], ['1+-2', '-1'], ['1--2', '3']]) {
+    const state = new CalculatorState();
+    assert.equal(state.pasteExpression(input), true, input);
+    assert.equal(state.evaluate().success, true, input);
+    assert.equal(state.resultString, expected, input);
+  }
+  const state = new CalculatorState();
+  state.inputDigit('8'); state.inputOperator('+'); state.inputOperator('×');
+  assert.equal(state.rawExpression, '8×');
+});
+
+test('Paste rejects over-limit and malformed scientific input without changing state', () => {
+  const state = new CalculatorState(); state.inputDigit('9'); const before = state.rawExpression;
+  assert.equal(state.pasteExpression('1234567890123456'), false);
+  assert.equal(state.pasteExpression('1.1234567890123456'), false);
+  for (const value of ['1e', '1e+', '1e--2', '1e2e3']) assert.equal(state.pasteExpression(value), false, value);
+  assert.equal(state.rawExpression, before);
+});
+
+test('Paste accepts scientific notation and round-trips values', () => {
+  for (const [input, expected] of [['1e+20', '1e+20'], ['-1.25e-8', '-1.25e-8'], ['2.5E+3', '2500']]) {
+    const state = new CalculatorState();
+    assert.equal(state.pasteExpression(input), true, input);
+    assert.equal(state.evaluate().success, true, input);
+    assert.equal(state.resultString, expected, input);
+  }
+});
+
+test('Paste accepts signed scientific exponents and rejects chained exponent markers', () => {
+  const positive = new CalculatorState();
+  assert.equal(positive.pasteExpression('1.2E+3'), true);
+  assert.equal(positive.evaluate().result, '1200');
+  const negative = new CalculatorState();
+  assert.equal(negative.pasteExpression('1.2e-3'), true);
+  assert.equal(negative.evaluate().result, '0.0012');
+  const malformed = new CalculatorState(); malformed.inputDigit('7');
+  const before = malformed.rawExpression;
+  assert.equal(malformed.pasteExpression('1e2e3'), false);
+  assert.equal(malformed.rawExpression, before);
+});
+
+test('Paste appends implicit multiplication after an existing closed group', () => {
+  const state = new CalculatorState();
+  state.inputOpenParen(); state.inputDigit('2'); state.inputCloseParen();
+  assert.equal(state.pasteExpression('3'), true);
+  assert.equal(state.rawExpression, '(2)×3');
+  assert.equal(state.evaluate().result, '6');
+});
+
+test('Incomplete power expressions fail without losing source tokens', () => {
+  const state = new CalculatorState(); state.inputDigit('2'); state.inputPower();
+  const before = state.rawExpression; const outcome = state.evaluate();
+  assert.equal(outcome.success, false); assert.equal(state.rawExpression, before);
+});
+
+test('Digit and decimal entry after closing parenthesis imply multiplication', () => {
+  const digitState = new CalculatorState();
+  digitState.inputOpenParen(); digitState.inputDigit('2'); digitState.inputCloseParen(); digitState.inputDigit('3');
+  assert.equal(digitState.rawExpression, '(2)×3'); assert.equal(digitState.evaluate().result, '6');
+  const decimalState = new CalculatorState();
+  decimalState.inputOpenParen(); decimalState.inputDigit('2'); decimalState.inputCloseParen(); decimalState.inputDecimal(); decimalState.inputDigit('5');
+  assert.equal(decimalState.rawExpression, '(2)×0.5'); assert.equal(decimalState.evaluate().result, '1');
+});
+
 test('Pre-decimal digit limit check (F-002 forward scanning)', () => {
   const state = new CalculatorState();
   for (let i = 0; i < 15; i++) state.inputDigit('1');
@@ -918,4 +983,47 @@ test('_tokensFromString preserves extreme large and small scientific notation in
   state2.inputDigit('1');
   assert.equal(state2.rawExpression, '1×10^(-22)+1');
   assert.equal(state2.evaluate().result, '1');
+});
+
+test('Paste parses unary minus transactionally and preserves binary operators', () => {
+  for (const [input, expected] of [['2×-3', '-6'], ['2÷-3', '-0.666666666667'], ['1+-2', '-1'], ['1--2', '3']]) {
+    const state = new CalculatorState();
+    assert.equal(state.pasteExpression(input), true, input);
+    assert.equal(state.evaluate().success, true, input);
+    assert.equal(state.resultString, expected, input);
+  }
+  const state = new CalculatorState(); state.inputDigit('8'); state.inputOperator('+'); state.inputOperator('×');
+  assert.equal(state.rawExpression, '8×');
+});
+
+test('Paste rejects over-limit and malformed scientific input without changing state', () => {
+  const state = new CalculatorState(); state.inputDigit('9'); const before = state.rawExpression;
+  assert.equal(state.pasteExpression('1234567890123456'), false);
+  assert.equal(state.pasteExpression('1.1234567890123456'), false);
+  for (const value of ['1e', '1e+', '1e--2', '1e2e3']) assert.equal(state.pasteExpression(value), false, value);
+  assert.equal(state.rawExpression, before);
+});
+
+test('Paste accepts scientific notation and round-trips values', () => {
+  for (const [input, expected] of [['1e+20', '1e+20'], ['-1.25e-8', '-1.25e-8'], ['2.5E+3', '2500']]) {
+    const state = new CalculatorState();
+    assert.equal(state.pasteExpression(input), true, input);
+    assert.equal(state.evaluate().success, true, input);
+    assert.equal(state.resultString, expected, input);
+  }
+});
+
+test('Incomplete power expressions fail without losing source tokens', () => {
+  const state = new CalculatorState(); state.inputDigit('2'); state.inputPower();
+  const before = state.rawExpression; const outcome = state.evaluate();
+  assert.equal(outcome.success, false); assert.equal(state.rawExpression, before);
+});
+
+test('Digit and decimal entry after closing parenthesis imply multiplication', () => {
+  const digitState = new CalculatorState();
+  digitState.inputOpenParen(); digitState.inputDigit('2'); digitState.inputCloseParen(); digitState.inputDigit('3');
+  assert.equal(digitState.rawExpression, '(2)×3'); assert.equal(digitState.evaluate().result, '6');
+  const decimalState = new CalculatorState();
+  decimalState.inputOpenParen(); decimalState.inputDigit('2'); decimalState.inputCloseParen(); decimalState.inputDecimal(); decimalState.inputDigit('5');
+  assert.equal(decimalState.rawExpression, '(2)×0.5'); assert.equal(decimalState.evaluate().result, '1');
 });

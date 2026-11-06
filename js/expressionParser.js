@@ -266,7 +266,7 @@ export function formatNumber(value) {
   // matching typical calculator behavior.
   const abs = Math.abs(rounded);
   if (rounded !== 0 && (abs >= 1e15 || abs < 1e-9)) {
-    return rounded.toExponential(6).replace(/\.?0+e/, 'e');
+    return rounded.toExponential(11).replace(/(?:\.0+|(?:(\.[0-9]*?)0+))e/, '$1e');
   }
 
   return rounded.toString();

@@ -3,8 +3,8 @@
  *
  * Translates raw user input (button clicks, keyboard events) into
  * calls on CalculatorState, then asks the caller to re-render.
- * This is the only module that attaches DOM event listeners for
- * calculator input.
+ * The composition root supplies transient UI state through callbacks; this
+ * controller does not query global document state.
  */
 
 const KEY_TO_ACTION = {
@@ -37,17 +37,37 @@ for (let d = 0; d <= 9; d += 1) {
   KEY_TO_ACTION[String(d)] = `digit-${d}`;
 }
 
+/**
+ * @property {import('./calculatorState.js').CalculatorState} state
+ * @property {(action?: string) => void} onChange
+ * @property {(tokens: Array<object>, result: string, before: string) => void} onEvaluate
+ * @property {() => boolean} isDialogOpen
+ * @property {() => boolean} isHistoryOpen
+ * @property {() => boolean} handleEscape
+ */
 export class InputController {
   /**
    * @param {object} params
    * @param {import('./calculatorState.js').CalculatorState} params.state
    * @param {(action?: string) => void} params.onChange - called after every mutating action
    * @param {(tokens: Array<object>, result: string, before: string) => void} params.onEvaluate - called on successful '='
+   * @param {() => boolean} [params.isDialogOpen]
+   * @param {() => boolean} [params.isHistoryOpen]
+   * @param {() => boolean} [params.handleEscape]
    */
-  constructor({ state, onChange, onEvaluate }) {
+  constructor({ state, onChange, onEvaluate, isDialogOpen = () => false, isHistoryOpen = () => false, handleEscape = () => false }) {
+    /** @type {import('./calculatorState.js').CalculatorState} */
     this.state = state;
+    /** @type {(action?: string) => void} */
     this.onChange = onChange;
+    /** @type {(tokens: Array<object>, result: string, before: string) => void} */
     this.onEvaluate = onEvaluate;
+    /** @type {() => boolean} */
+    this.isDialogOpen = isDialogOpen;
+    /** @type {() => boolean} */
+    this.isHistoryOpen = isHistoryOpen;
+    /** @type {() => boolean} */
+    this.handleEscape = handleEscape;
   }
 
   /**
@@ -119,49 +139,14 @@ export class InputController {
    * @param {HTMLElement} keypadEl
    */
   attachKeypad(keypadEl) {
-    let lastPointerType = null;
-
-    keypadEl.addEventListener('pointerdown', (event) => {
-      if (event.button !== undefined && event.button !== 0) return;
-      lastPointerType = event.pointerType;
-
-      const button = event.target.closest('button[data-action]');
-      if (!button || button.disabled) return;
-
-      // Prevent default stops double tap zoom, scroll gestures on keypad, and delayed synthetic click
-      event.preventDefault();
-
-      const action = button.dataset.action;
-      const value = button.dataset.value;
-
-      if (action === 'digit') {
-        this.dispatch('digit', value);
-      } else {
-        this.dispatch(action);
-      }
-
-      button.dispatchEvent(new CustomEvent('calc-pressed', { bubbles: true }));
-    });
-
-    // Fallback for accessibility/keyboard synthetic clicks when pointerdown was not triggered
     keypadEl.addEventListener('click', (event) => {
-      if (lastPointerType) {
-        // Already handled via pointerdown
-        lastPointerType = null;
-        return;
-      }
       const button = event.target.closest('button[data-action]');
       if (!button || button.disabled) return;
 
       const action = button.dataset.action;
       const value = button.dataset.value;
-
-      if (action === 'digit') {
-        this.dispatch('digit', value);
-      } else {
-        this.dispatch(action);
-      }
-
+      if (action === 'digit') this.dispatch('digit', value);
+      else this.dispatch(action);
       button.dispatchEvent(new CustomEvent('calc-pressed', { bubbles: true }));
     });
   }
@@ -174,16 +159,16 @@ export class InputController {
         return;
       }
 
-      // Ignore keystrokes while focus is inside a text input/dialog control, or when modal is open.
-      if (event.target && event.target.closest && event.target.closest('input, textarea, dialog')) {
+      // Ignore keystrokes while focus is inside a text input/dialog control.
+      if (event.target && event.target.closest && event.target.closest('input, textarea, dialog')) return;
+      if (this.isDialogOpen()) return;
+
+      if (event.key === 'Escape' && this.handleEscape()) {
+        event.preventDefault();
+        event.stopPropagation();
         return;
       }
-
-      const confirmDialog = document.getElementById('confirm-dialog');
-      if (confirmDialog && confirmDialog.open) return;
-
-      const historyPanel = document.getElementById('history-panel');
-      if (historyPanel && historyPanel.classList.contains('is-open')) return;
+      if (this.isHistoryOpen()) return;
 
       const mapped = KEY_TO_ACTION[event.key];
       if (!mapped) return;

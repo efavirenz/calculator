@@ -13,6 +13,8 @@ export class HistoryManager {
   constructor() {
     /** @type {Array<{id:string, timestamp:number, expression:string, result:string}>} */
     this.entries = loadHistory();
+    this.lastSaveWasTrimmed = false;
+    this.lastSaveFailed = false;
   }
 
   getAll() {
@@ -37,7 +39,11 @@ export class HistoryManager {
     if (this.entries.length > MAX_HISTORY_ITEMS) {
       this.entries.length = MAX_HISTORY_ITEMS;
     }
-    saveHistory(this.entries);
+    const persistence = saveHistory(this.entries);
+    if (persistence.success) this.entries = persistence.entries;
+    else this.entries.shift(); // Do not show a record that could not be persisted.
+    this.lastSaveWasTrimmed = persistence.trimmed;
+    this.lastSaveFailed = !persistence.success;
     return entry;
   }
 
@@ -47,6 +53,8 @@ export class HistoryManager {
 
   clear() {
     this.entries = [];
+    this.lastSaveWasTrimmed = false;
+    this.lastSaveFailed = false;
     clearHistoryStorage();
   }
 }

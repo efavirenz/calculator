@@ -3,7 +3,9 @@
 An iPhone-style calculator built as an installable, offline-capable Progressive
 Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
-![version](https://img.shields.io/badge/version-v7.7-blue)
+Icon regeneration is optional developer tooling and requires Pillow. Create a Python virtual environment and install the pinned dependency with `python3 -m pip install -r requirements-dev.txt`.
+
+![version](https://img.shields.io/badge/version-v7.8-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -41,11 +43,11 @@ The app follows a strict **separation between business logic and the DOM**:
    └──────────────────────┘
 ```
 
-**Business logic never touches the DOM.** `CalculatorState` and
-`expressionParser.js` are plain JavaScript classes/functions you could run in
-Node with zero changes. `uiRenderer.js` is the only module that reads/writes
-`document`. `inputController.js` is the bridge: it listens for clicks/keys and
-calls methods on `CalculatorState`, then asks `app.js` to re-render.
+**Calculation and data modules never touch the DOM.** `CalculatorState`,
+`expressionParser.js`, formatting, history, and storage logic are plain
+JavaScript that can be tested in Node. `app.js` is the composition root and
+owns DOM event wiring; `inputController.js` receives UI-state callbacks rather
+than querying global document state; `uiRenderer.js` owns DOM rendering.
 
 ## 2. Folder Structure
 
@@ -55,6 +57,7 @@ calculator-pwa/
 ├── manifest.json              # PWA manifest (relative paths)
 ├── service-worker.js          # Offline cache, versioned
 ├── generate_icons.py          # One-off script used to produce icons/*.png
+├── requirements-dev.txt       # Optional pinned Pillow dependency for icon generation
 ├── css/
 │   └── style.css
 ├── js/
@@ -68,6 +71,13 @@ calculator-pwa/
 │   ├── storageManager.js      # localStorage read/write
 │   └── uiRenderer.js          # All DOM mutation
 ├── icons/                     # App icons (see generate_icons.py)
+├── tests/
+│   ├── format.test.js          # Display formatting tests
+│   ├── parser.test.js          # Tokenizer and expression evaluation tests
+│   ├── state.test.js           # Calculator state and paste regression tests
+│   ├── inputController.test.js # Keyboard and transient UI tests
+│   └── storage.test.js         # Persistence quota recovery tests
+├── implementation_report.html # v7.8 remediation report
 ├── .github/workflows/deploy.yml
 ├── LICENSE
 └── README.md (this file)
@@ -194,6 +204,10 @@ toggles the sign of the result directly and starts a fresh expression from
 that negated value — the standard iOS behavior of continuing from the
 result.
 
+Icon generation (optional developer tooling)
+
+The deployed PWA has no Python/runtime dependency. To regenerate PNG assets, create a virtual environment and run `python3 -m pip install -r requirements-dev.txt`; then run `python3 generate_icons.py`.
+
 ## 8. Local Storage Design
 
 Key: `calculator.history.v1` → JSON array of:
@@ -205,9 +219,14 @@ Key: `calculator.history.v1` → JSON array of:
 - Newest entries are unshifted to the front; the array is trimmed to 50
   items after every insert.
 - All reads/writes go through `storageManager.js`, which wraps every call in
-  `try/catch` so a full/blocked storage quota (e.g. Safari private mode)
-  degrades gracefully to an empty, non-persisted history instead of crashing
-  the app.
+  `try/catch` so a full/blocked storage quota does not crash calculation. When
+  quota pressure requires trimming, the history manager reconciles its in-memory
+  list with the persisted subset, removes a new entry that cannot be persisted,
+  and notifies the user when history was reduced.
+- History is stored as readable JSON in this browser's `localStorage` until
+  cleared. It is not encrypted or a secure secret store. Browser storage is
+  shared by all apps on the same origin (including sibling GitHub Pages paths);
+  do not enter sensitive secrets. Use a dedicated origin when app isolation is required.
 - Tapping a history entry re-runs that calculation's **result** as a fresh
   input (common "reuse a past value" UX), then closes the panel.
 
@@ -218,12 +237,11 @@ Key: `calculator.history.v1` → JSON array of:
   icons) on `install`, using a **cache-first** strategy with a network
   fallback for anything else same-origin (navigational requests fallback to
   `./index.html` on network failure).
-- **Versioned cache**: `CACHE_NAME = calculator-cache-v7.7`. The `activate`
-  handler deletes any cache whose name starts with `calculator-cache-` and
-  doesn't match the current version. **Release process:** bump
-  `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
-  cached file, so returning users don't get stuck on stale assets. Tapping
-  the version badge in the topbar automatically purges old caches and reloads.
+- **Versioned cache**: `CACHE_NAME` uses the `calculator-cache-` prefix. The
+  `activate` handler removes only older Calculator caches. **Release process:**
+  bump `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
+  cached file. The version badge checks for an update on the Calculator's exact
+  service-worker scope; it never clears origin-wide registrations or caches.
 - **GitHub Pages subpath compatibility**: every path in `manifest.json`,
   `service-worker.js`, and `index.html` is relative (`./...`), and
   `start_url` / `scope` are both `"./"`. This is required because GitHub
@@ -323,6 +341,20 @@ Per the "most iOS-like behavior, document the decision" rule:
    exponent mode back to base level.
 
 ## 15. Version History
+
+### v7.8 — 2026-11-06
+
+#### 🛠️ Audit Remediation & Reliability Updates
+
+- Scoped force-update to the Calculator service-worker registration; unrelated origin registrations and caches are left untouched.
+- Made clipboard expression paste transactional, preserving unary minus and rejecting over-limit/malformed input without changing the current expression. Scientific notation is supported for copy/paste round trips.
+- Prevented incomplete exponent expressions from evaluating after trimming; added implicit multiplication after a closed parenthesis for keypad and paste entry.
+- Preserved exponent rendering metadata when evaluation auto-closes nested parentheses.
+- Kept runtime cache writes within the service-worker fetch response lifetime.
+- Removed the keypad's duplicate pointer/click activation route and prioritized Escape dismissal of transient UI.
+- Restored 12 significant digits in scientific output, reconciled memory with quota-trimmed history, and guaranteed clipboard fallback cleanup.
+- Removed the viewport zoom cap and documented local-history privacy, DOM boundaries, and optional Pillow tooling.
+- Expanded the native Node regression suite from 64 to 81 tests, including input-controller and storage-quota coverage.
 
 ### v7.7 — 2026-10-26
 

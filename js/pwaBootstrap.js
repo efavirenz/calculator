@@ -30,30 +30,25 @@ export function registerServiceWorker() {
 }
 
 /**
- * Wires up force-update action on version badge tap. Purges service worker
- * registrations and CacheStorage, then reloads the page.
+ * Wires up a scoped update action on the version badge. It never clears
+ * origin-wide registrations or caches belonging to other applications.
  * @param {HTMLElement|null} versionBadgeEl
  */
 export function setupForceUpdate(versionBadgeEl) {
   if (!versionBadgeEl) return;
 
   versionBadgeEl.addEventListener('click', async () => {
-    versionBadgeEl.textContent = 'Updating...';
+    versionBadgeEl.textContent = 'Checking...';
     try {
       if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const reg of registrations) {
-          await reg.unregister();
-        }
-      }
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        for (const key of keys) {
-          await caches.delete(key);
+        const expectedScope = new URL('./', document.baseURI).href;
+        const registration = await navigator.serviceWorker.getRegistration(expectedScope);
+        if (registration && registration.scope === expectedScope) {
+          await registration.update();
         }
       }
     } catch (err) {
-      console.warn('Purge cache error:', err);
+      console.warn('Service worker update check failed:', err);
     }
     window.location.reload();
   });

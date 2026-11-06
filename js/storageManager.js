@@ -37,19 +37,21 @@ export function loadHistory() {
 /**
  * Persists the full history array.
  * @param {Array<object>} entries
- * @returns {boolean} true on success, false on error
+ * @returns {{success:boolean, entries:Array<object>, trimmed:boolean}} persistence status and retained entries
  */
 export function saveHistory(entries) {
+  if (!Array.isArray(entries)) return { success: false, entries: [], trimmed: false };
   try {
     window.localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
-    return true;
+    return { success: true, entries: [...entries], trimmed: false };
   } catch (err) {
-    if (Array.isArray(entries) && entries.length > 5) {
-      // Auto-eviction fallback: retry with truncated history
-      return saveHistory(entries.slice(0, Math.floor(entries.length / 2)));
+    if (entries.length > 5) {
+      const reduced = entries.slice(0, Math.floor(entries.length / 2));
+      const result = saveHistory(reduced);
+      return { ...result, trimmed: result.success };
     }
     console.warn('Failed to save history to storage:', err);
-    return false;
+    return { success: false, entries: [], trimmed: false };
   }
 }
 

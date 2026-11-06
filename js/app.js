@@ -36,31 +36,34 @@ async function copyToClipboard(text) {
     // Fallback for context without permissions
   }
 
+  const textarea = document.createElement('textarea');
   try {
-    const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.style.position = 'fixed';
     textarea.style.opacity = '0';
     document.body.appendChild(textarea);
     textarea.focus();
     textarea.select();
-    const success = document.execCommand('copy');
-    document.body.removeChild(textarea);
-    return Boolean(success);
+    return Boolean(document.execCommand('copy'));
   } catch {
     return false;
+  } finally {
+    textarea.remove();
   }
 }
 
 function main() {
   const state = new CalculatorState();
   const history = new HistoryManager();
+  const confirmDialog = document.getElementById('confirm-dialog');
+  const historyPanel = document.getElementById('history-panel');
+  const clipboardMenu = document.getElementById('clipboard-menu');
 
   // Prevent iOS Safari overscroll rubber-banding except on scrollable elements (history list, display lines)
   document.addEventListener(
     'touchmove',
     (event) => {
-      if (event.target.closest('.history-list, .display-line')) {
+      if (event.target?.closest('.history-list, .display-line')) {
         return;
       }
       event.preventDefault();
@@ -114,11 +117,27 @@ function main() {
 
   const controller = new InputController({
     state,
+    isDialogOpen: () => Boolean(confirmDialog?.open),
+    isHistoryOpen: () => Boolean(historyPanel?.classList.contains('is-open')),
+    handleEscape: () => {
+      if (confirmDialog?.open) return false; // Native dialog owns its Escape behavior.
+      if (historyPanel?.classList.contains('is-open')) {
+        toggleHistoryPanel(false);
+        return true;
+      }
+      if (clipboardMenu && !clipboardMenu.hidden) {
+        hideClipboardMenu();
+        return true;
+      }
+      return false;
+    },
     onChange: () => render(),
     onEvaluate: (tokens) => {
       const expressionText = tokensToPlainText(tokens);
       history.add(tokens, expressionText, state.resultString);
       renderHistory(history.getAll(), handleHistorySelect);
+      if (history.lastSaveWasTrimmed) showToast('Older history removed to free storage');
+      else if (history.lastSaveFailed) showToast('History could not be saved; browser storage is full');
     },
   });
 
@@ -148,8 +167,6 @@ function main() {
 
   // Tap lower display to open Copy / Paste context menu
   const lowerDisplayEl = document.getElementById('lower-display');
-  const clipboardMenu = document.getElementById('clipboard-menu');
-
   addSwipeSafeClickListener(lowerDisplayEl, () => {
     showClipboardMenu();
   });
@@ -206,7 +223,6 @@ function main() {
   const historyCloseBtn = document.querySelector('.history-close');
   const historyOverlay = document.getElementById('history-overlay');
   const clearHistoryBtn = document.getElementById('clear-history-btn');
-  const confirmDialog = document.getElementById('confirm-dialog');
   const confirmYesBtn = document.getElementById('confirm-yes');
   const confirmNoBtn = document.getElementById('confirm-no');
 
@@ -228,15 +244,6 @@ function main() {
   });
   confirmNoBtn.addEventListener('click', () => {
     confirmDialog.close ? confirmDialog.close() : confirmDialog.removeAttribute('open');
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      if (document.getElementById('history-panel').classList.contains('is-open')) {
-        toggleHistoryPanel(false);
-      }
-      hideClipboardMenu();
-    }
   });
 
   registerServiceWorker();

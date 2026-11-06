@@ -263,6 +263,140 @@ export class CalculatorState {
   }
 
   /**
+   * Parses clipboard content into a temporary token stream.
+   * The live state is not touched until the whole expression validates.
+   * @param {string} raw
+   * @returns {Array<object>|null}
+   */
+  _parsePastedExpression(raw) {
+    const cleaned = raw
+      .replace(/[,\s$€£¥₹]/g, '')
+      .replace(/\*/g, '×')
+      .replace(/\//g, '÷')
+      .replace(/x/gi, '×');
+    if (!cleaned || !/^[0-9.+\-×÷^()eE]+$/.test(cleaned) || !/\d/.test(cleaned)) return null;
+
+    const tokens = [];
+    const numberPattern = /(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
+    const parenStack = [];
+    let exponentMode = false;
+    let previous = null;
+    let index = 0;
+    const append = (char, kind, options = {}) => tokens.push(makeToken(char, kind, options));
+
+    while (index < cleaned.length) {
+      const ch = cleaned[index];
+      if (/[0-9.]/.test(ch)) {
+        numberPattern.lastIndex = index;
+        const match = numberPattern.exec(cleaned);
+        if (!match) return null;
+        const literal = match[0];
+        const eIndex = literal.search(/[eE]/);
+        const mantissa = eIndex < 0 ? literal : literal.slice(0, eIndex);
+        const exponent = eIndex < 0 ? null : literal.slice(eIndex + 1);
+        const parts = mantissa.split('.');
+        const integerPart = parts[0] || '';
+        const fractionPart = parts[1] || '';
+        if ((integerPart.length || 0) > MAX_DIGITS_BEFORE_DECIMAL || fractionPart.length > MAX_DIGITS_AFTER_DECIMAL) return null;
+        if (exponent !== null && (!/^[+-]?\d+$/.test(exponent) || Math.abs(Number(exponent)) > 10000)) return null;
+        if (previous === 'rparen') append('×', 'operator', { isExponent: exponentMode });
+        if (previous === 'number') return null;
+
+        const normalizedInteger = integerPart || '0';
+        for (const digit of normalizedInteger) append(digit, 'digit', { isExponent: exponentMode });
+        if (mantissa.includes('.')) append('.', 'decimal', { isExponent: exponentMode });
+        for (const digit of fractionPart) append(digit, 'digit', { isExponent: exponentMode });
+
+        if (exponent !== null) {
+          append('×', 'operator', { isExponent: exponentMode });
+          append('1', 'digit', { isExponent: exponentMode });
+          append('0', 'digit', { isExponent: exponentMode });
+          append('^', 'operator', { hidden: true });
+          append('(', 'lparen', { isExponent: true });
+          if (exponent.startsWith('-')) append('-', 'operator', { isExponent: true });
+          for (const digit of exponent.replace(/^[+-]/, '')) append(digit, 'digit', { isExponent: true });
+          append(')', 'rparen', { isExponent: true });
+        }
+        index = numberPattern.lastIndex;
+        previous = 'number';
+        continue;
+      }
+
+      if (ch === '(') {
+        if (previous === 'number' || previous === 'rparen') append('×', 'operator', { isExponent: exponentMode });
+        append('(', 'lparen', { isExponent: exponentMode });
+        parenStack.push(exponentMode);
+        index += 1;
+        previous = 'lparen';
+        continue;
+      }
+      if (ch === ')') {
+        if (!parenStack.length || !['number', 'rparen'].includes(previous)) return null;
+        append(')', 'rparen', { isExponent: parenStack.pop() });
+        exponentMode = parenStack.length ? parenStack[parenStack.length - 1] : false;
+        index += 1;
+        previous = 'rparen';
+        continue;
+      }
+      if (ch === '^') {
+        if (!['number', 'rparen'].includes(previous)) return null;
+        append('^', 'operator', { hidden: true });
+        exponentMode = true;
+        index += 1;
+        previous = 'operator';
+        continue;
+      }
+      if ('+-×÷'.includes(ch)) {
+        const unary = previous === null || previous === 'operator' || previous === 'lparen';
+        if (unary) {
+          if (ch === '+') { index += 1; continue; }
+          append('-', 'operator', { isExponent: exponentMode });
+        } else {
+          append(ch, 'operator', { isExponent: exponentMode });
+        }
+        index += 1;
+        previous = 'operator';
+        continue;
+      }
+      return null;
+    }
+
+    if (parenStack.length || !['number', 'rparen'].includes(previous)) return null;
+    try {
+      evaluateExpression(this._tokensToRawExpression(tokens));
+    } catch {
+      return null;
+    }
+    return tokens;
+  }
+
+  _tokensToRawExpression(tokens) {
+    let expression = '';
+    for (let i = 0; i < tokens.length; i += 1) {
+      const token = tokens[i];
+      if (token.hidden) {
+        if (token.char === '^') expression += '^';
+        continue;
+      }
+      if (token.isExponent && token.kind === 'lparen' && tokens[i - 1]?.char === '^' && tokens[i - 1]?.hidden) {
+        let depth = 0;
+        let group = '';
+        for (let j = i; j < tokens.length; j += 1) {
+          const nested = tokens[j];
+          if (nested.hidden) continue;
+          group += nested.char;
+          if (nested.kind === 'lparen') depth += 1;
+          if (nested.kind === 'rparen' && --depth === 0) { i = j; break; }
+        }
+        expression += group;
+        continue;
+      }
+      expression += token.char;
+    }
+    return expression;
+  }
+
+  /**
    * Appends a digit (0-9). Behaves according to current mode:
    * entry mode -> extends the current number; exponent mode -> extends
    * the exponent (marked isExponent); result state -> starts a fresh
@@ -273,7 +407,10 @@ export class CalculatorState {
     this._startFreshIfShowingResult();
 
     if (this._leadingDigitLimitReached()) return;
-
+    const last = this.tokens[this.tokens.length - 1];
+    if (last?.kind === 'rparen') {
+      this.tokens.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
+    }
     this.tokens.push(makeToken(digit, 'digit', { isExponent: this.exponentMode }));
   }
 
@@ -282,6 +419,10 @@ export class CalculatorState {
     this._clearErrorIfNeeded();
     this._startFreshIfShowingResult();
 
+    const last = this.tokens[this.tokens.length - 1];
+    if (last?.kind === 'rparen') {
+      this.tokens.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
+    }
     const range = this._trailingNumberHasDecimal();
     if (range.hasDecimal) return; // no-op: malformed decimal guard
 
@@ -332,79 +473,38 @@ export class CalculatorState {
   }
 
   /**
-   * Appends a pasted expression or numeric string to the current equation.
-   * Normalizes multiply/divide symbols, strips whitespace, commas, and currency symbols.
-   * Feeds tokens through existing input methods to respect digit limits, decimal rules, and syntax guards.
+   * Parses clipboard text into a temporary token stream, validates the complete
+   * expression and per-operand digit limits, then commits atomically.
+   * Normalizes multiply/divide symbols, whitespace, separators, and currency symbols.
    * @param {string} raw - clipboard text
    * @returns {boolean} true if expression was successfully pasted
    */
   pasteExpression(raw) {
     if (typeof raw !== 'string') return false;
+    const pastedTokens = this._parsePastedExpression(raw);
+    if (!pastedTokens) return false;
 
-    // Strip thousands separators (commas), whitespace, and common currency symbols
-    // Also normalize text variants: * -> ×, / -> ÷, x/X -> ×
-    const cleaned = raw
-      .replace(/[,\s$€£¥₹]/g, '')
-      .replace(/\*/g, '×')
-      .replace(/\//g, '÷')
-      .replace(/x/gi, '×');
-
-    if (!cleaned) return false;
-
-    // Validate: must contain only allowed calculator characters
-    if (!/^[0-9.+\-×÷^()]+$/.test(cleaned)) return false;
-    // Must contain at least one digit
-    if (!/\d/.test(cleaned)) return false;
-
-    this._clearErrorIfNeeded();
-    this._startFreshIfShowingResult();
-
-    let expectExpParen = false;
-    let inExpGroup = false;
-    let expParenDepth = 0;
-
-    for (const ch of cleaned) {
-      if (expectExpParen) {
-        if (ch === '(') {
-          inExpGroup = true;
-          expParenDepth = 1;
-        }
-        expectExpParen = false;
-      } else if (inExpGroup) {
-        if (ch === '(') {
-          expParenDepth += 1;
-        }
+    // Commit only after full grammar, limit, and parser validation succeeds.
+    if (this.displayState === DisplayState.RESULT || this.isError) {
+      this.tokens = pastedTokens;
+    } else {
+      const combined = [...this.tokens];
+      const lastToken = combined[combined.length - 1];
+      if (lastToken?.kind === 'rparen' && ['digit', 'decimal', 'lparen'].includes(pastedTokens[0]?.kind)) {
+        combined.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
       }
-
-      if (ch >= '0' && ch <= '9') {
-        this.inputDigit(ch);
-      } else if (ch === '.') {
-        this.inputDecimal();
-      } else if (ch === '+') {
-        this.inputOperator('+');
-      } else if (ch === '-') {
-        this.inputOperator('-');
-      } else if (ch === '×') {
-        this.inputOperator('×');
-      } else if (ch === '÷') {
-        this.inputOperator('÷');
-      } else if (ch === '^') {
-        this.inputPower();
-        expectExpParen = true;
-      } else if (ch === '(') {
-        this.inputOpenParen();
-      } else if (ch === ')') {
-        this.inputCloseParen();
-        if (inExpGroup) {
-          expParenDepth -= 1;
-          if (expParenDepth <= 0) {
-            inExpGroup = false;
-            this.exponentMode = false;
-          }
-        }
+      combined.push(...pastedTokens);
+      try {
+        evaluateExpression(this._tokensToRawExpression(combined));
+      } catch {
+        return false;
       }
+      this.tokens = combined;
     }
-
+    this.displayState = DisplayState.ENTRY;
+    this.resultString = null;
+    this.errorMessage = null;
+    this.exponentMode = false;
     return true;
   }
 
@@ -677,21 +777,28 @@ export class CalculatorState {
   evaluate() {
     if (this.isEmpty) return;
 
-    // Strip any trailing operator tokens before evaluating (e.g. '61+' -> '61')
-    while (
-      this.tokens.length > 0 &&
-      this.tokens[this.tokens.length - 1].kind === 'operator'
-    ) {
+    // Preserve incomplete powers and unary exponent signs; only retain the
+    // established convenience behavior for a trailing binary arithmetic op.
+    const last = this.tokens[this.tokens.length - 1];
+    if (last?.kind === 'operator') {
+      const isExponentSyntax = last.char === '^' || last.isExponent;
+      const isBinaryArithmetic = ['+', '-', '×', '÷'].includes(last.char) && !last.isExponent;
+      if (isExponentSyntax || !isBinaryArithmetic) {
+        this.errorMessage = 'Incomplete expression';
+        return { success: false, error: this.errorMessage };
+      }
       this.tokens.pop();
     }
 
     if (this.isEmpty) return;
 
-    const balance = this.parenBalance;
-    if (balance > 0) {
-      for (let b = 0; b < balance; b += 1) {
-        this.tokens.push(makeToken(')', 'rparen', { isExponent: false }));
-      }
+    const openParenFlags = [];
+    for (const token of this.tokens) {
+      if (token.kind === 'lparen') openParenFlags.push(Boolean(token.isExponent));
+      else if (token.kind === 'rparen') openParenFlags.pop();
+    }
+    while (openParenFlags.length) {
+      this.tokens.push(makeToken(')', 'rparen', { isExponent: openParenFlags.pop() }));
     }
 
     const expr = this.rawExpression;
