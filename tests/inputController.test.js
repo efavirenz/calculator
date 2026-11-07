@@ -28,16 +28,22 @@ test('Escape retains clear-key behavior when no transient UI is open', () => {
 function createKeypadHarness(state) {
   const listeners = {};
   const pressedEvents = [];
+  const classes = new Set();
   const button = {
     disabled: false,
     dataset: { action: 'digit', value: '7' },
+    classList: {
+      add(name) { classes.add(name); },
+      remove(name) { classes.delete(name); },
+      contains(name) { return classes.has(name); },
+    },
     focus() {},
     dispatchEvent(event) { pressedEvents.push(event.type); return true; },
   };
   const target = { closest: () => button };
   const keypad = { addEventListener(type, handler) { listeners[type] = handler; } };
   new InputController({ state }).attachKeypad(keypad);
-  return { listeners, button, target, pressedEvents };
+  return { listeners, button, target, pressedEvents, classes };
 }
 
 test('keypad pointerdown dispatches immediately and ignores its follow-up pointer click', () => {
@@ -56,6 +62,27 @@ test('keypad pointerdown dispatches immediately and ignores its follow-up pointe
   assert.equal(prevented, true);
   assert.equal(state.rawExpression, '7');
   assert.deepEqual(harness.pressedEvents, ['calc-pressed']);
+});
+
+test('pointer focus styling clears when keyboard interaction resumes or focus leaves', () => {
+  const state = new CalculatorState();
+  const harness = createKeypadHarness(state);
+  const tap = () => harness.listeners.pointerdown({
+    target: harness.target,
+    isPrimary: true,
+    button: 0,
+    preventDefault() {},
+  });
+
+  tap();
+  assert.equal(harness.classes.has('pointer-focused'), true);
+  harness.listeners.keydown({ target: harness.target });
+  assert.equal(harness.classes.has('pointer-focused'), false);
+
+  tap();
+  assert.equal(harness.classes.has('pointer-focused'), true);
+  harness.listeners.focusout({ target: harness.target });
+  assert.equal(harness.classes.has('pointer-focused'), false);
 });
 
 test('rapid keypad pointerdown events are all accepted without debounce', () => {

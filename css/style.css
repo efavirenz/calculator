@@ -257,7 +257,7 @@ button {
   transition: opacity 0.04s ease-in, transform 0.04s ease-in;
 }
 
-.btn:focus-visible {
+.btn:focus-visible:not(.pointer-focused) {
   outline: 3px solid #ffffff;
   outline-offset: 2px;
 }

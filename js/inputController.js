@@ -154,6 +154,16 @@ export class InputController {
       button.dispatchEvent(new CustomEvent('calc-pressed', { bubbles: true }));
     };
 
+    const clearPointerFocus = (event) => {
+      const button = event.target?.closest?.('button[data-action]');
+      button?.classList?.remove('pointer-focused');
+    };
+
+    // Restore keyboard focus indicators when keyboard interaction resumes or
+    // focus moves away from a pointer-activated button.
+    keypadEl.addEventListener('keydown', clearPointerFocus);
+    keypadEl.addEventListener('focusout', clearPointerFocus);
+
     keypadEl.addEventListener('pointerdown', (event) => {
       if (event.isPrimary === false) return;
       if (event.button !== undefined && event.button !== 0) return;
@@ -165,7 +175,9 @@ export class InputController {
       event.preventDefault();
 
       // pointerdown cancellation also prevents the browser's normal focus step.
-      // Restore focus explicitly without allowing the page to scroll.
+      // Restore focus for interaction, but suppress the visual focus ring caused
+      // by pointer activation. Keyboard focus indicators remain available.
+      button.classList?.add('pointer-focused');
       if (typeof button.focus === 'function') {
         try {
           button.focus({ preventScroll: true });
