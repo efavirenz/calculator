@@ -82,6 +82,6 @@ calculator/
   2. `#version-badge` text in `index.html`
   3. Version shield and release notes in `README.md`
   4. Current release summary in this `AGENTS.md` file
-- **Current Release**: v7.8 (2026-11-06), with 81 passing Node tests at release validation. See `README.md` section 15 for release details. The update flow must target only the Calculator service-worker scope and must not clear unrelated origin registrations or caches.
+- **Current Release**: v7.9 (2026-11-07), with 85 passing Node tests and successful manual iPhone validation of Safari and the installed PWA. Keypad input dispatches on primary `pointerdown`; the click fallback handles only `detail === 0` keyboard/assistive/programmatic activation, without persistent pointer state. See `README.md` section 15 for release details. The update flow must target only the Calculator service-worker scope and must not clear unrelated origin registrations or caches.
 - **Relative URLs & Subpath Deployment**: Maintain relative paths (`./...`) across all asset/script references for GitHub Pages subpath compatibility (`https://<username>.github.io/<reponame>/`). Never use root-relative paths (`/...`).
 - **Local Serving**: ES modules and Service Worker require HTTP/HTTPS origin (`python3 -m http.server 8080` or `npx serve .`). Opening via `file://` fails.

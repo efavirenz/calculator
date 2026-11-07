@@ -1,7 +1,7 @@
 /**
  * inputController.js
  *
- * Translates raw user input (button clicks, keyboard events) into
+ * Translates raw user input (pointer and keyboard events) into
  * calls on CalculatorState, then asks the caller to re-render.
  * The composition root supplies transient UI state through callbacks; this
  * controller does not query global document state.
@@ -135,19 +135,54 @@ export class InputController {
   }
 
   /**
-   * Attaches delegated touch/pointer listeners to the keypad container.
+   * Attaches delegated pointer input plus a keyboard/assistive-click fallback.
+   * Pointer actions run on pointerdown for immediate feedback. The click path
+   * accepts only detail=0 activations (keyboard, assistive technology, or
+   * programmatic clicks), so the pointer-generated click cannot dispatch twice.
+   * No persistent pointer flag is kept, so a cancelled pointer cannot swallow
+   * a later keyboard activation.
    * @param {HTMLElement} keypadEl
    */
   attachKeypad(keypadEl) {
-    keypadEl.addEventListener('click', (event) => {
+    const activateButton = (button) => {
+      if (!button || button.disabled) return;
+
+      const { action, value } = button.dataset;
+      if (action === 'digit') this.dispatch('digit', value);
+      else this.dispatch(action);
+
+      button.dispatchEvent(new CustomEvent('calc-pressed', { bubbles: true }));
+    };
+
+    keypadEl.addEventListener('pointerdown', (event) => {
+      if (event.isPrimary === false) return;
+      if (event.button !== undefined && event.button !== 0) return;
+
       const button = event.target.closest('button[data-action]');
       if (!button || button.disabled) return;
 
-      const action = button.dataset.action;
-      const value = button.dataset.value;
-      if (action === 'digit') this.dispatch('digit', value);
-      else this.dispatch(action);
-      button.dispatchEvent(new CustomEvent('calc-pressed', { bubbles: true }));
+      // Process immediately; prevent the compatibility click/gesture default.
+      event.preventDefault();
+
+      // pointerdown cancellation also prevents the browser's normal focus step.
+      // Restore focus explicitly without allowing the page to scroll.
+      if (typeof button.focus === 'function') {
+        try {
+          button.focus({ preventScroll: true });
+        } catch {
+          button.focus();
+        }
+      }
+
+      activateButton(button);
+    });
+
+    keypadEl.addEventListener('click', (event) => {
+      // Pointer clicks are already handled at pointerdown. detail=0 preserves
+      // Enter/Space, screen-reader, and programmatic button activation.
+      if (event.detail !== 0) return;
+      const button = event.target.closest('button[data-action]');
+      activateButton(button);
     });
   }
 

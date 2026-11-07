@@ -5,7 +5,7 @@ Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
 Icon regeneration is optional developer tooling and requires Pillow. Create a Python virtual environment and install the pinned dependency with `python3 -m pip install -r requirements-dev.txt`.
 
-![version](https://img.shields.io/badge/version-v7.8-blue)
+![version](https://img.shields.io/badge/version-v7.9-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -85,7 +85,7 @@ calculator-pwa/
 
 ## 3. Data Flow
 
-1. A button click or keyboard press hits `InputController`.
+1. A button pointer press or keyboard-generated click hits `InputController`.
 2. `InputController` dispatches to a `CalculatorState` mutator method
    (`inputDigit`, `inputOperator`, `inputPower`, `inputReciprocal`, `evaluate`,
    `backspace`, `clearAll`, ...).
@@ -148,7 +148,7 @@ grouping parens around the exponent — see §7.
 | `expressionParser.js` | Tokenize → Shunting Yard → RPN eval. Zero UI/state knowledge.          | nothing                |
 | `calculatorState.js`  | Token stream mutations, display-state transitions, calls the parser.   | `expressionParser.js`  |
 | `uiRenderer.js`       | Renders tokens/state to DOM; toggles disabled/aria attributes.         | DOM only               |
-| `inputController.js`  | Delegated click + keyboard listeners → `CalculatorState` method calls. | `calculatorState.js`   |
+| `inputController.js`  | Delegated pointer + keyboard-compatible click listeners → state calls. | `calculatorState.js`   |
 | `historyManager.js`   | In-memory history list: newest-first, 50-item cap.                     | `storageManager.js`    |
 | `storageManager.js`   | `localStorage` read/write with try/catch guards.                       | nothing                |
 | `formatUtils.js`      | Token stream → plain-text string (Unicode superscripts) for history.   | nothing                |
@@ -341,6 +341,16 @@ Per the "most iOS-like behavior, document the decision" rule:
    exponent mode back to base level.
 
 ## 15. Version History
+
+### v7.9 — 2026-11-07
+
+#### 📱 Immediate Keypad Pointer Input & Duplicate Activation Guard
+
+- **Immediate Pointer Activation** — Keypad actions now dispatch on primary `pointerdown`, rather than waiting for the browser's later `click` event. Bumped `CACHE_VERSION` to `v7.9`.
+- **No Duplicate Pointer Clicks** — The click fallback accepts only `event.detail === 0` activations for keyboard, assistive technology, and programmatic clicks. Pointer-generated clicks are ignored because that action already ran on `pointerdown`.
+- **No Stale Pointer State** — Removed persistent pointer-type tracking; an absent or cancelled compatibility click cannot swallow the next keyboard activation. Button focus is restored after cancelling the pointer default, and existing `touch-action: manipulation` remains in place.
+- **Regression Coverage** — Added tests for immediate pointer activation, rapid sequential presses, follow-up click suppression, keyboard activation after pointer use, and disabled/non-primary input. Full Node suite: 85 passing tests.
+- **iPhone Manual Validation** — Confirmed the keypad interaction checks pass in Safari and the installed PWA, including single/rapid taps, operator sequences, backspace, clear, disabled keys, touch interactions, and the PWA launch/reload/offline checks.
 
 ### v7.8 — 2026-11-06
 

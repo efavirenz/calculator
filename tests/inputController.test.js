@@ -24,3 +24,96 @@ test('Escape retains clear-key behavior when no transient UI is open', () => {
   target.handler({ key: 'Escape', target: { closest: () => null }, preventDefault: () => {}, stopPropagation: () => {}, metaKey: false, ctrlKey: false, altKey: false });
   assert.equal(state.isEmpty, true);
 });
+
+function createKeypadHarness(state) {
+  const listeners = {};
+  const pressedEvents = [];
+  const button = {
+    disabled: false,
+    dataset: { action: 'digit', value: '7' },
+    focus() {},
+    dispatchEvent(event) { pressedEvents.push(event.type); return true; },
+  };
+  const target = { closest: () => button };
+  const keypad = { addEventListener(type, handler) { listeners[type] = handler; } };
+  new InputController({ state }).attachKeypad(keypad);
+  return { listeners, button, target, pressedEvents };
+}
+
+test('keypad pointerdown dispatches immediately and ignores its follow-up pointer click', () => {
+  const state = new CalculatorState();
+  const harness = createKeypadHarness(state);
+  let prevented = false;
+
+  harness.listeners.pointerdown({
+    target: harness.target,
+    isPrimary: true,
+    button: 0,
+    preventDefault() { prevented = true; },
+  });
+  harness.listeners.click({ target: harness.target, detail: 1 });
+
+  assert.equal(prevented, true);
+  assert.equal(state.rawExpression, '7');
+  assert.deepEqual(harness.pressedEvents, ['calc-pressed']);
+});
+
+test('rapid keypad pointerdown events are all accepted without debounce', () => {
+  const state = new CalculatorState();
+  const harness = createKeypadHarness(state);
+  const tap = () => harness.listeners.pointerdown({
+    target: harness.target,
+    isPrimary: true,
+    button: 0,
+    preventDefault() {},
+  });
+
+  harness.button.dataset.value = '1';
+  tap();
+  harness.listeners.click({ target: harness.target, detail: 1 });
+  harness.button.dataset.value = '2';
+  tap();
+  harness.listeners.click({ target: harness.target, detail: 1 });
+
+  assert.equal(state.rawExpression, '12');
+  assert.equal(harness.pressedEvents.length, 2);
+});
+
+test('keyboard-generated keypad click still works after pointer interaction', () => {
+  const state = new CalculatorState();
+  const harness = createKeypadHarness(state);
+
+  harness.listeners.pointerdown({
+    target: harness.target,
+    isPrimary: true,
+    button: 0,
+    preventDefault() {},
+  });
+  harness.button.dataset.value = '4';
+  harness.listeners.click({ target: harness.target, detail: 0 });
+
+  assert.equal(state.rawExpression, '74');
+  assert.equal(harness.pressedEvents.length, 2);
+});
+
+test('disabled and non-primary keypad pointer events do not dispatch', () => {
+  const state = new CalculatorState();
+  const harness = createKeypadHarness(state);
+
+  harness.listeners.pointerdown({
+    target: harness.target,
+    isPrimary: false,
+    button: 0,
+    preventDefault() {},
+  });
+  harness.button.disabled = true;
+  harness.listeners.pointerdown({
+    target: harness.target,
+    isPrimary: true,
+    button: 0,
+    preventDefault() {},
+  });
+
+  assert.equal(state.rawExpression, '');
+  assert.deepEqual(harness.pressedEvents, []);
+});
