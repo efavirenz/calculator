@@ -257,6 +257,11 @@ button {
   transition: opacity 0.04s ease-in, transform 0.04s ease-in;
 }
 
+/* Reset the browser-native focus ring; add our own indicator for keyboard focus below. */
+.btn:focus {
+  outline: none;
+}
+
 .btn:focus-visible:not(.pointer-focused) {
   outline: 3px solid #ffffff;
   outline-offset: 2px;

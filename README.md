@@ -5,7 +5,7 @@ Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
 Icon regeneration is optional developer tooling and requires Pillow. Create a Python virtual environment and install the pinned dependency with `python3 -m pip install -r requirements-dev.txt`.
 
-![version](https://img.shields.io/badge/version-v7.10-blue)
+![version](https://img.shields.io/badge/version-v7.11-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -341,6 +341,15 @@ Per the "most iOS-like behavior, document the decision" rule:
    exponent mode back to base level.
 
 ## 15. Version History
+
+### v7.11 — 2026-11-07
+
+#### 🎯 Remove Safari Native Focus Ring After Touch
+
+- **Browser Focus Outline Reset** — Reset the native `.btn:focus` outline so Safari/WebKit no longer displays its default blue ring after a keypad tap.
+- **Keyboard Focus Indicator Retained** — Keep the custom white `:focus-visible` outline for keyboard navigation, excluding buttons marked as pointer-focused. The pointer marker is cleared when keyboard interaction resumes or focus leaves the button.
+- **PWA Cache** — Bumped `CACHE_VERSION` to `v7.11` so returning visitors receive the updated focus styling.
+- **Validation** — Full Node test suite: 86 passing tests; JavaScript syntax checks and `git diff --check` pass. The v7.11 focus-ring change requires manual confirmation on iPhone Safari/PWA.
 
 ### v7.10 — 2026-11-07
 
