@@ -144,3 +144,54 @@ test('disabled and non-primary keypad pointer events do not dispatch', () => {
   assert.equal(state.rawExpression, '');
   assert.deepEqual(harness.pressedEvents, []);
 });
+
+function dispatchKeyboard(state, key, { onButton = false } = {}) {
+  const target = { addEventListener: (_type, callback) => { target.handler = callback; } };
+  const changes = [];
+  const controller = new InputController({ state, onChange: (action) => changes.push(action) });
+  controller.attachKeyboard(target);
+  let prevented = false;
+  target.handler({
+    key,
+    target: {
+      closest(selector) {
+        return selector === 'button, [role="button"]' && onButton ? {} : null;
+      },
+    },
+    preventDefault() { prevented = true; },
+    stopPropagation() {},
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+  });
+  return { prevented, changes };
+}
+
+test('Enter on a focused button defers to native activation (AUD-006)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('7');
+  const { prevented, changes } = dispatchKeyboard(state, 'Enter', { onButton: true });
+  assert.equal(prevented, false);
+  assert.deepEqual(changes, []);
+  assert.equal(state.rawExpression, '7');
+});
+
+test('Space on a focused button defers to native activation (AUD-006)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('7');
+  const { prevented, changes } = dispatchKeyboard(state, ' ', { onButton: true });
+  assert.equal(prevented, false);
+  assert.deepEqual(changes, []);
+  assert.equal(state.rawExpression, '7');
+});
+
+test('Enter still evaluates when focus is not on a control (AUD-006)', () => {
+  const state = new CalculatorState();
+  state.inputDigit('2');
+  state.inputOperator('+');
+  state.inputDigit('2');
+  const { prevented, changes } = dispatchKeyboard(state, 'Enter');
+  assert.equal(prevented, true);
+  assert.deepEqual(changes, ['equals']);
+  assert.equal(state.resultString, '4');
+});

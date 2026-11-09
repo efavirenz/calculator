@@ -5,7 +5,7 @@ Web App (PWA) — vanilla HTML/CSS/JS, no frameworks, no build step, no CDN.
 
 Icon regeneration is optional developer tooling and requires Pillow. Create a Python virtual environment and install the pinned dependency with `python3 -m pip install -r requirements-dev.txt`.
 
-![version](https://img.shields.io/badge/version-v7.11-blue)
+![version](https://img.shields.io/badge/version-v7.12-blue)
 ![platform](https://img.shields.io/badge/stack-vanilla%20JS%20%2F%20HTML%20%2F%20CSS-informational)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -76,8 +76,8 @@ calculator-pwa/
 │   ├── parser.test.js          # Tokenizer and expression evaluation tests
 │   ├── state.test.js           # Calculator state and paste regression tests
 │   ├── inputController.test.js # Keyboard and transient UI tests
-│   └── storage.test.js         # Persistence quota recovery tests
-├── implementation_report.html # v7.8 remediation report
+│   ├── pwa.test.js             # Static precache/version/manifest integrity tests
+│   └── storage.test.js         # Persistence, validation and quota recovery tests
 ├── .github/workflows/deploy.yml
 ├── LICENSE
 └── README.md (this file)
@@ -166,9 +166,10 @@ grouping parens around the exponent — see §7.
 - `^` is right-associative: `2^3^2` evaluates as `2^(3^2) = 512`.
 - Unary minus is a distinct RPN operator (`u-`) so `3+-12` and a leading `-5`
   both parse correctly without contaminating binary subtraction.
-- Floating point cleanup: results are rounded to 12 significant digits
-  (`toPrecision(12)`) before display, and `-0` is normalized to `0`, so e.g.
-  `0.1 + 0.2` displays as `0.3`, not `0.30000000000000004`.
+- Floating point cleanup: results are rounded to 15 significant digits
+  (`toPrecision(15)`) before display, matching the 15-digit input acceptance
+  limit so pressing `=` never corrupts an accepted value. `-0` is normalized to
+  `0`, so e.g. `0.1 + 0.2` displays as `0.3`, not `0.30000000000000004`.
 
 ### Superscript rendering (`x^y`, `1/x`)
 
@@ -179,11 +180,12 @@ which `uiRenderer.js` renders inside a `<sup>` element.
 
 - **`x^y`**: inserts a hidden `^` and flips on "exponent entry mode." Every
   digit/decimal typed while that mode is active is tagged `isExponent`.
-  Pressing any operator, `)`, or `=` ends the mode (per spec).
-- **`1/x`**: rewraps the trailing operand as `(operand)^(-1)`. The parens
-  around the *operand* are real, visible tokens (so `1+12` → `1+(12)⁻¹`
-  visibly keeps the `(12)`). The parens wrapping `-1` and the `^` itself are
-  all `hidden: true` — only the raised `-1` shows.
+  Pressing `x^y` again exits the mode; pressing `=` also ends it. A binary
+  arithmetic operator (`+ - × ÷`) at the top level closes the exponent
+  (`5 x^y 2 + 3 =` evaluates `5² + 3 = 28`), while operators typed inside an
+  explicitly opened exponent group stay in the exponent (`9 x^y ( 1 ÷ 3 )`).
+- **`1/x`**: wraps the trailing operand as a visible `(1÷operand)` group.
+  Pressing `1/x` again on that group unwraps it back to the operand.
 
 ### `(` / `)` balance-based buttons
 
@@ -199,10 +201,13 @@ minor input mistakes instead of blocking the user with an error state.
 ### `+/-` (sign toggle)
 
 Toggles a leading unary `-` on the trailing operand (number or fully-closed
-parenthesized group). If the calculator is showing a result (State B),
+parenthesized group). On a completed trailing power (`base^exponent`, after
+`xʸ` has exited exponent entry) the sign applies to the base, so
+`5 xʸ 2 xʸ +/-` and `5 +/- xʸ 2` both produce `(-5)^(2) = 25`. While still
+editing the exponent, `+/-` negates the exponent instead
+(`5 xʸ 2 +/-` → `5^(-2)`). If the calculator is showing a result (State B),
 toggles the sign of the result directly and starts a fresh expression from
-that negated value — the standard iOS behavior of continuing from the
-result.
+that negated value — the standard iOS behavior of continuing from the result.
 
 Icon generation (optional developer tooling)
 
@@ -223,25 +228,39 @@ Key: `calculator.history.v1` → JSON array of:
   quota pressure requires trimming, the history manager reconciles its in-memory
   list with the persisted subset, removes a new entry that cannot be persisted,
   and notifies the user when history was reduced.
+- Loads re-validate every persisted record (id, timestamp, finite numeric
+  result, token shape, and a 512-token per-entry bound) and re-apply the
+  50-item cap, so malformed or hostile sibling-origin writes cannot enter the
+  UI unchecked. A `storage` event re-reads the shared key when another tab
+  writes it.
 - History is stored as readable JSON in this browser's `localStorage` until
   cleared. It is not encrypted or a secure secret store. Browser storage is
   shared by all apps on the same origin (including sibling GitHub Pages paths);
   do not enter sensitive secrets. Use a dedicated origin when app isolation is required.
-- Tapping a history entry re-runs that calculation's **result** as a fresh
-  input (common "reuse a past value" UX), then closes the panel.
+- Tapping a history entry restores the full **expression + result** in State B
+  (exactly as if `=` had just been pressed). Legacy entries without tokens fall
+  back to restoring the result as a fresh editable value.
 
 ## 9. PWA Architecture
 
 - `manifest.json` + `service-worker.js` provide installability and offline
-  support. The service worker precaches the full app shell (HTML, CSS, JS,
-  icons) on `install`, using a **cache-first** strategy with a network
-  fallback for anything else same-origin (navigational requests fallback to
-  `./index.html` on network failure).
+  support. The service worker precaches the app shell (HTML, CSS, JS) as
+  required core assets and the manifest/icons as optional assets
+  (`Promise.allSettled`), so one missing icon cannot block installation. It
+  uses a **cache-first** strategy scoped to this app's cache, with a network
+  fallback for anything else same-origin (navigations fall back to
+  `./index.html`; other offline misses return an explicit `504 Offline`
+  response).
+- `manifest.json` uses `"orientation": "any"` so the installed app can follow
+  the device into the landscape layout the stylesheet already implements.
 - **Versioned cache**: `CACHE_NAME` uses the `calculator-cache-` prefix. The
   `activate` handler removes only older Calculator caches. **Release process:**
   bump `CACHE_VERSION` in `service-worker.js` on every deploy that changes a
   cached file. The version badge checks for an update on the Calculator's exact
   service-worker scope; it never clears origin-wide registrations or caches.
+  Tapping the badge reloads only after a new worker activates (or when no
+  Calculator registration exists); if the app is already current it reports
+  "Already up to date" and keeps the current expression.
 - **GitHub Pages subpath compatibility**: every path in `manifest.json`,
   `service-worker.js`, and `index.html` is relative (`./...`), and
   `start_url` / `scope` are both `"./"`. This is required because GitHub
@@ -266,10 +285,17 @@ Key: `calculator.history.v1` → JSON array of:
 - `)` button exposes `aria-disabled` + the native `disabled` attribute when
   balance is 0.
 - All interactive elements are real `<button>`s with visible
-  `:focus-visible` outlines and ≥44px touch targets.
+  `:focus-visible` outlines and ≥44px touch targets. Focused buttons keep
+  native `Enter`/`Space` activation instead of the global `=` shortcut.
+- Both display lines are keyboard-operable (`role="button"`, `tabindex="0"`):
+  the expression line resumes editing and the value line opens the clipboard
+  actions. The clipboard actions move focus into the menu and restore it on
+  dismissal.
 - The display region uses `aria-live="polite"` so screen readers announce
   new results.
 - History items are keyboard-operable (`Enter`/`Space`) with `role="button"`.
+  The closed drawer is `inert` (plus a CSS visibility fallback), and closing it
+  returns focus to the hamburger button.
 
 ## 11. Running Locally
 
@@ -327,20 +353,46 @@ Per the "most iOS-like behavior, document the decision" rule:
    than `^` (so `-2^2 = -4`), matching standard math/most calculators.
 3. **`+/-` on a mid-expression operand**: toggles a leading unary `-`
    immediately before the trailing number/paren-group, rather than requiring
-   the operand to be re-typed.
+   the operand to be re-typed. Once exponent entry is exited, the sign
+   applies to the power's base (`5 xʸ 2 xʸ +/-` → `(-5)^2`); while the
+   exponent is still being entered, it applies to the exponent.
 4. **Typography**: all button text is white (including the function row),
    per the "White typography" requirement — a deliberate departure from
    Apple's own black-on-light-gray function buttons, consistent with this
    app's fully custom color palette.
-5. **History item tap**: re-runs the entry's *result* as a fresh calculation
-   (rather than only previewing it), which is the more useful default for
-   reusing a past value in a new calculation.
+5. **History item tap**: restores the entry's full expression + result in
+   State B (exactly like a completed `=`), then closes the panel. Legacy
+   token-less entries restore the result as a fresh editable value.
 6. **Exponent-mode persistence & auto-grouping**: Exponent mode persists
-   across operators and parentheses (e.g. `2^(3+1)`), rendered as superscript
-   and grouped into parentheses during evaluation. Pressing `xʸ` toggles off
-   exponent mode back to base level.
+   across parentheses and inside explicitly opened exponent groups (e.g.
+   `9^(1÷3)`), rendered as superscript and grouped into parentheses during
+   evaluation. Pressing `xʸ` toggles the mode off; a top-level binary
+   arithmetic operator also closes it, and `=` ends it.
+7. **Paste combination**: when the current expression ends in a value and the
+   pasted text starts with a value, an implicit `×` is inserted instead of
+   silently concatenating digits (`5` + `12345` → `5×12345`).
+8. **Ambiguous pasted separators**: input containing a comma without a decimal
+   point is rejected; input containing both `,` and `.` is interpreted so the
+   last separator wins as the decimal separator.
+9. **Manifest orientation**: `"any"` (the app already implements a landscape
+   layout) rather than locking installed windows to portrait.
 
 ## 15. Version History
+
+### v7.12 — 2026-11-09
+
+#### 🛡️ Audit Remediation: Correctness, Accessibility, PWA & CI Hardening
+
+- **Numeric Fidelity** — Display precision now matches the 15-digit input limit (`toPrecision(15)`), so accepted 13–15 digit values survive `=` and chained calculations instead of silently rounding (`1234567890123` stays `1234567890123`). Float-noise cleanup still applies (`0.1+0.2` → `0.3`).
+- **Exponent Mode Semantics** — Backspace after an incomplete power re-derives exponent mode; typing a digit/decimal after exiting exponent mode inserts an implicit `×`; top-level binary arithmetic closes exponent mode (`5 xʸ 2 + 3 =` → 28) while operators inside an explicit exponent group stay in the exponent.
+- **Sign on Powers** — `+/-` on a trailing power now negates the base, matching `xʸ`'s auto-wrap (`5^2 +/-` → `(-5)^2 = 25`).
+- **Paste Semantics** — Value-adjacent pastes insert an implicit `×` instead of concatenating; Unicode dashes are normalized; comma-only and mixed-separator inputs are handled deterministically; specific rejection reasons surface in the toast. Syntax validation is now separate from evaluation, so `1÷0`, `10^400`, and `(-2)^0.5` paste successfully.
+- **Evaluation Rollback** — Auto-closed parentheses and trailing-operator trimming are committed only after a successful evaluation, so a failed `=` no longer mutates the visible token stream.
+- **History & Storage** — Persisted history is validated at the storage boundary (ids, timestamps, finite results, token shape, 512-token cap, 50-item cap); the legacy result-only restore is encapsulated in `loadResultOnly()`; repeated `=` presses are deduplicated; the drawer renders lazily and with a `DocumentFragment`; a cross-tab `storage` listener reloads the shared key.
+- **Accessibility** — `Enter`/`Space` on a focused control keep native activation; the closed history drawer is `inert` with a CSS visibility fallback and restores focus on close; both display lines are keyboard-operable; the clipboard menu manages focus in/out; the overlay no longer carries a contradictory `aria-hidden`.
+- **PWA** — Service-worker install splits required core assets from optional manifest/icons (`Promise.allSettled`), offline misses return an explicit `504` response, caches are matched within the Calculator cache only, and the version badge only reloads after a new worker activates (reporting "Already up to date" otherwise). Manifest orientation is now `"any"`.
+- **CI & Rendering** — Deploys now run the Node test suite and a dynamic-code security grep before publishing a staged `_site/` artifact; resize/orientation renders are coalesced into one animation frame and display measurement is batched.
+- **Validation** — Full Node test suite: 110 passing tests, including new numeric-fidelity, state-invariant, paste-matrix, storage-validation, keyboard-activation, and static PWA integrity tests.
 
 ### v7.11 — 2026-11-07
 

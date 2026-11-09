@@ -22,10 +22,18 @@
  *   'B' -> upper display shows expression, lower shows result
  */
 
-import { evaluateExpression, ExpressionError } from './expressionParser.js';
+import {
+  evaluateExpression,
+  ExpressionError,
+  SIGNIFICANT_DIGITS,
+  validateSyntax,
+} from './expressionParser.js';
+import { isEnclosedInParens, isValidToken } from './formatUtils.js';
 
 const MAX_DIGITS_BEFORE_DECIMAL = 15;
 const MAX_DIGITS_AFTER_DECIMAL = 15;
+const MAX_PASTED_TOKENS = 512;
+const BINARY_ARITHMETIC_OPERATORS = new Set(['+', '-', '×', '÷']);
 
 export const DisplayState = Object.freeze({
   ENTRY: 'A',
@@ -34,19 +42,6 @@ export const DisplayState = Object.freeze({
 
 function makeToken(char, kind, { isExponent = false, hidden = false } = {}) {
   return { char, kind, isExponent, hidden };
-}
-
-function isEnclosedInParens(str) {
-  if (!str.startsWith('(') || !str.endsWith(')')) return false;
-  let depth = 0;
-  for (let k = 0; k < str.length; k += 1) {
-    if (str[k] === '(') depth += 1;
-    else if (str[k] === ')') {
-      depth -= 1;
-      if (depth === 0 && k < str.length - 1) return false;
-    }
-  }
-  return depth === 0;
 }
 
 function isSingleAtomicOperand(tokens) {
@@ -163,16 +158,26 @@ export class CalculatorState {
 
   /** Raw string handed to the expression parser (wraps exponent runs in parentheses). */
   get rawExpression() {
+    return this._rawExpressionFromTokens(this.tokens);
+  }
+
+  /**
+   * Serializes any token array into the parser-facing expression string,
+   * wrapping contiguous isExponent runs after '^' in parentheses.
+   * @param {Array<object>} tokens
+   * @returns {string}
+   */
+  _rawExpressionFromTokens(tokens) {
     let result = '';
     let i = 0;
-    while (i < this.tokens.length) {
-      const t = this.tokens[i];
+    while (i < tokens.length) {
+      const t = tokens[i];
       result += t.char;
       if (t.char === '^') {
         let j = i + 1;
         let expChars = '';
-        while (j < this.tokens.length && this.tokens[j].isExponent) {
-          expChars += this.tokens[j].char;
+        while (j < tokens.length && tokens[j].isExponent) {
+          expChars += tokens[j].char;
           j += 1;
         }
         if (expChars.length > 0) {
@@ -263,18 +268,58 @@ export class CalculatorState {
   }
 
   /**
-   * Parses clipboard content into a temporary token stream.
-   * The live state is not touched until the whole expression validates.
+   * Normalizes clipboard text into the calculator's internal operator
+   * alphabet and resolves decimal separators deterministically.
    * @param {string} raw
-   * @returns {Array<object>|null}
+   * @returns {{text: string, reason: string|null}}
    */
-  _parsePastedExpression(raw) {
-    const cleaned = raw
-      .replace(/[,\s$€£¥₹]/g, '')
+  _normalizePastedInput(raw) {
+    let text = String(raw)
+      // Unicode minus/dash variants -> ASCII minus.
+      .replace(/[−–—﹣]/g, '-')
+      .replace(/[⁄∕]/g, '/')
+      // Grouping whitespace, currency symbols, and a leading/trailing + sign.
+      .replace(/[\s$€£¥₹]/g, '');
+
+    if (text === '') return { text, reason: 'empty' };
+
+    const hasComma = text.includes(',');
+    const hasDot = text.includes('.');
+    if (hasComma && hasDot) {
+      // Locale-aware: the last separator is the decimal separator, the other
+      // one is a grouping separator.
+      if (text.lastIndexOf(',') > text.lastIndexOf('.')) {
+        text = text.replace(/\./g, '').replace(/,/g, '.');
+      } else {
+        text = text.replace(/,/g, '');
+      }
+    } else if (hasComma) {
+      // A comma without a decimal point is ambiguous (thousands vs decimal).
+      // Reject rather than silently misinterpreting the value by a factor of 1000.
+      return { text, reason: 'ambiguous' };
+    }
+
+    text = text
       .replace(/\*/g, '×')
       .replace(/\//g, '÷')
       .replace(/x/gi, '×');
-    if (!cleaned || !/^[0-9.+\-×÷^()eE]+$/.test(cleaned) || !/\d/.test(cleaned)) return null;
+
+    return { text, reason: null };
+  }
+
+  /**
+   * Parses clipboard content into a temporary token stream.
+   * The live state is not touched until the whole expression validates.
+   * @param {string} raw
+   * @returns {{tokens: Array<object>|null, reason: string}}
+   */
+  _parsePastedExpression(raw) {
+    const normalized = this._normalizePastedInput(raw);
+    const cleaned = normalized.text;
+    if (normalized.reason) return { tokens: null, reason: normalized.reason };
+    if (!cleaned || !/^[0-9.+\-×÷^()eE]+$/.test(cleaned) || !/\d/.test(cleaned)) {
+      return { tokens: null, reason: 'invalid' };
+    }
 
     const tokens = [];
     const numberPattern = /(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
@@ -289,7 +334,7 @@ export class CalculatorState {
       if (/[0-9.]/.test(ch)) {
         numberPattern.lastIndex = index;
         const match = numberPattern.exec(cleaned);
-        if (!match) return null;
+        if (!match) return { tokens: null, reason: 'invalid' };
         const literal = match[0];
         const eIndex = literal.search(/[eE]/);
         const mantissa = eIndex < 0 ? literal : literal.slice(0, eIndex);
@@ -297,10 +342,14 @@ export class CalculatorState {
         const parts = mantissa.split('.');
         const integerPart = parts[0] || '';
         const fractionPart = parts[1] || '';
-        if ((integerPart.length || 0) > MAX_DIGITS_BEFORE_DECIMAL || fractionPart.length > MAX_DIGITS_AFTER_DECIMAL) return null;
-        if (exponent !== null && (!/^[+-]?\d+$/.test(exponent) || Math.abs(Number(exponent)) > 10000)) return null;
+        if ((integerPart.length || 0) > MAX_DIGITS_BEFORE_DECIMAL || fractionPart.length > MAX_DIGITS_AFTER_DECIMAL) {
+          return { tokens: null, reason: 'too-long' };
+        }
+        if (exponent !== null && (!/^[+-]?\d+$/.test(exponent) || Math.abs(Number(exponent)) > 10000)) {
+          return { tokens: null, reason: 'too-long' };
+        }
         if (previous === 'rparen') append('×', 'operator', { isExponent: exponentMode });
-        if (previous === 'number') return null;
+        if (previous === 'number') return { tokens: null, reason: 'invalid' };
 
         const normalizedInteger = integerPart || '0';
         for (const digit of normalizedInteger) append(digit, 'digit', { isExponent: exponentMode });
@@ -331,7 +380,7 @@ export class CalculatorState {
         continue;
       }
       if (ch === ')') {
-        if (!parenStack.length || !['number', 'rparen'].includes(previous)) return null;
+        if (!parenStack.length || !['number', 'rparen'].includes(previous)) return { tokens: null, reason: 'invalid' };
         append(')', 'rparen', { isExponent: parenStack.pop() });
         exponentMode = parenStack.length ? parenStack[parenStack.length - 1] : false;
         index += 1;
@@ -339,7 +388,7 @@ export class CalculatorState {
         continue;
       }
       if (ch === '^') {
-        if (!['number', 'rparen'].includes(previous)) return null;
+        if (!['number', 'rparen'].includes(previous)) return { tokens: null, reason: 'invalid' };
         append('^', 'operator', { hidden: true });
         exponentMode = true;
         index += 1;
@@ -358,42 +407,36 @@ export class CalculatorState {
         previous = 'operator';
         continue;
       }
-      return null;
+      return { tokens: null, reason: 'invalid' };
     }
 
-    if (parenStack.length || !['number', 'rparen'].includes(previous)) return null;
+    if (parenStack.length || !['number', 'rparen'].includes(previous)) return { tokens: null, reason: 'invalid' };
+    if (tokens.length > MAX_PASTED_TOKENS) return { tokens: null, reason: 'too-long' };
     try {
-      evaluateExpression(this._tokensToRawExpression(tokens));
+      validateSyntax(this._rawExpressionFromTokens(tokens));
     } catch {
-      return null;
+      return { tokens: null, reason: 'invalid' };
     }
-    return tokens;
+    return { tokens, reason: null };
   }
 
-  _tokensToRawExpression(tokens) {
-    let expression = '';
-    for (let i = 0; i < tokens.length; i += 1) {
-      const token = tokens[i];
-      if (token.hidden) {
-        if (token.char === '^') expression += '^';
-        continue;
-      }
-      if (token.isExponent && token.kind === 'lparen' && tokens[i - 1]?.char === '^' && tokens[i - 1]?.hidden) {
-        let depth = 0;
-        let group = '';
-        for (let j = i; j < tokens.length; j += 1) {
-          const nested = tokens[j];
-          if (nested.hidden) continue;
-          group += nested.char;
-          if (nested.kind === 'lparen') depth += 1;
-          if (nested.kind === 'rparen' && --depth === 0) { i = j; break; }
-        }
-        expression += group;
-        continue;
-      }
-      expression += token.char;
+  /**
+   * Inserts an implicit '×' when a newly typed value starts a new factor.
+   * A plain digit/decimal continues the number currently being entered, but
+   * '(' always starts a new factor; a completed exponent run follows the same
+   * rule once exponent entry has been exited (AUD-004).
+   * @param {boolean} alwaysAfterValue - also multiply after a plain digit/decimal
+   */
+  _ensureImplicitMultiplicationBeforeValue(alwaysAfterValue = false) {
+    const last = this.tokens[this.tokens.length - 1];
+    if (!last) return;
+    const endsValue = last.kind === 'digit' || last.kind === 'decimal' || last.kind === 'rparen';
+    if (!endsValue) return;
+
+    const exponentRunEnded = Boolean(last.isExponent && !this.exponentMode);
+    if (alwaysAfterValue || last.kind === 'rparen' || exponentRunEnded) {
+      this.tokens.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
     }
-    return expression;
   }
 
   /**
@@ -406,11 +449,8 @@ export class CalculatorState {
     this._clearErrorIfNeeded();
     this._startFreshIfShowingResult();
 
+    this._ensureImplicitMultiplicationBeforeValue();
     if (this._leadingDigitLimitReached()) return;
-    const last = this.tokens[this.tokens.length - 1];
-    if (last?.kind === 'rparen') {
-      this.tokens.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
-    }
     this.tokens.push(makeToken(digit, 'digit', { isExponent: this.exponentMode }));
   }
 
@@ -419,10 +459,7 @@ export class CalculatorState {
     this._clearErrorIfNeeded();
     this._startFreshIfShowingResult();
 
-    const last = this.tokens[this.tokens.length - 1];
-    if (last?.kind === 'rparen') {
-      this.tokens.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
-    }
+    this._ensureImplicitMultiplicationBeforeValue();
     const range = this._trailingNumberHasDecimal();
     if (range.hasDecimal) return; // no-op: malformed decimal guard
 
@@ -475,14 +512,28 @@ export class CalculatorState {
   /**
    * Parses clipboard text into a temporary token stream, validates the complete
    * expression and per-operand digit limits, then commits atomically.
-   * Normalizes multiply/divide symbols, whitespace, separators, and currency symbols.
+   * Combination policy (AUD-002): when the current expression ends in a value
+   * and the pasted text starts with a value, an implicit '×' is inserted
+   * instead of silently concatenating digits.
    * @param {string} raw - clipboard text
    * @returns {boolean} true if expression was successfully pasted
    */
   pasteExpression(raw) {
-    if (typeof raw !== 'string') return false;
-    const pastedTokens = this._parsePastedExpression(raw);
-    if (!pastedTokens) return false;
+    return this.pasteExpressionWithReason(raw).success;
+  }
+
+  /**
+   * Same as pasteExpression() but reports why a paste was rejected so the UI
+   * can show a specific message.
+   * @param {string} raw - clipboard text
+   * @returns {{success: boolean, reason?: string}}
+   */
+  pasteExpressionWithReason(raw) {
+    if (typeof raw !== 'string') return { success: false, reason: 'empty' };
+    const parsed = this._parsePastedExpression(raw);
+    if (!parsed.tokens) return { success: false, reason: parsed.reason };
+
+    const pastedTokens = parsed.tokens;
 
     // Commit only after full grammar, limit, and parser validation succeeds.
     if (this.displayState === DisplayState.RESULT || this.isError) {
@@ -490,14 +541,21 @@ export class CalculatorState {
     } else {
       const combined = [...this.tokens];
       const lastToken = combined[combined.length - 1];
-      if (lastToken?.kind === 'rparen' && ['digit', 'decimal', 'lparen'].includes(pastedTokens[0]?.kind)) {
-        combined.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
+      const leftIsValue = Boolean(
+        lastToken && (lastToken.kind === 'digit' || lastToken.kind === 'decimal' || lastToken.kind === 'rparen')
+      );
+      const rightStartsValue = Boolean(
+        pastedTokens[0] &&
+          (pastedTokens[0].kind === 'digit' || pastedTokens[0].kind === 'decimal' || pastedTokens[0].kind === 'lparen')
+      );
+      if (leftIsValue && rightStartsValue) {
+        combined.push(makeToken('×', 'operator', { isExponent: Boolean(lastToken.isExponent && this.exponentMode) }));
       }
       combined.push(...pastedTokens);
       try {
-        evaluateExpression(this._tokensToRawExpression(combined));
+        validateSyntax(this._rawExpressionFromTokens(combined));
       } catch {
-        return false;
+        return { success: false, reason: 'rejected' };
       }
       this.tokens = combined;
     }
@@ -505,16 +563,7 @@ export class CalculatorState {
     this.resultString = null;
     this.errorMessage = null;
     this.exponentMode = false;
-    return true;
-  }
-
-  /**
-   * Backward-compatible alias for pasteExpression.
-   * @param {string} raw
-   * @returns {boolean}
-   */
-  pasteNumber(raw) {
-    return this.pasteExpression(raw);
+    return { success: true };
   }
 
   /** Appends a binary operator: + - × ÷ */
@@ -526,6 +575,20 @@ export class CalculatorState {
       this.tokens = this._tokensFromString(this.resultString);
       this.displayState = DisplayState.ENTRY;
       this.resultString = null;
+    }
+
+    // NEW-001: a binary arithmetic operator at the top level of an exponent
+    // closes the exponent run, matching calculator convention
+    // (5 xʸ 2 + 3 = 28). Operators inside an explicitly opened exponent group
+    // stay in the exponent (e.g. 9 xʸ ( 1 ÷ 3 )), and '-' immediately after
+    // '^' or '(' remains a unary minus inside the exponent (negative exponent).
+    if (this.exponentMode && BINARY_ARITHMETIC_OPERATORS.has(op) && !this._hasOpenExponentGroup()) {
+      const last = this.tokens[this.tokens.length - 1];
+      const staysUnaryExponent =
+        op === '-' && (!last || last.kind === 'lparen' || (last.kind === 'operator' && last.char === '^'));
+      if (!staysUnaryExponent) {
+        this.exponentMode = false;
+      }
     }
 
     if (this.isEmpty) {
@@ -652,7 +715,41 @@ export class CalculatorState {
   }
 
   /**
+   * Returns the index of a top-level '^' operator within [start, end), or -1.
+   * An operator nested inside parentheses is not part of the trailing power.
+   */
+  _findTopLevelPowerIndex(start, end) {
+    let depth = 0;
+    for (let i = start; i < end; i += 1) {
+      const token = this.tokens[i];
+      if (token.kind === 'lparen') depth += 1;
+      else if (token.kind === 'rparen') depth -= 1;
+      else if (depth === 0 && token.kind === 'operator' && token.char === '^') return i;
+    }
+    return -1;
+  }
+
+  /** True when a token slice is exactly "( - ... )" with matching outer parens. */
+  _isWrappedNegativeOperand(tokens) {
+    if (tokens.length < 3) return false;
+    if (tokens[0].kind !== 'lparen') return false;
+    if (tokens[1].kind !== 'operator' || tokens[1].char !== '-') return false;
+    let depth = 0;
+    for (let i = 0; i < tokens.length; i += 1) {
+      if (tokens[i].kind === 'lparen') depth += 1;
+      else if (tokens[i].kind === 'rparen') {
+        depth -= 1;
+        if (depth === 0 && i < tokens.length - 1) return false;
+      }
+    }
+    return depth === 0;
+  }
+
+  /**
    * Toggles the sign of the trailing operand (+/- button).
+   *
+   * On a power term (base^exponent) the sign applies to the base, matching
+   * inputPower()'s auto-wrap: 5^2 -> (-5)^2 -> 5^2.
    */
   toggleSign() {
     this._clearErrorIfNeeded();
@@ -670,6 +767,31 @@ export class CalculatorState {
     const range = this._findTrailingOperandRange();
     if (!range) return;
 
+    if (!this.exponentMode) {
+      const powerIndex = this._findTopLevelPowerIndex(range.start, range.end);
+      if (powerIndex !== -1) {
+        const baseTokens = this.tokens.slice(range.start, powerIndex);
+        const tailTokens = this.tokens.slice(powerIndex, range.end);
+        const before = this.tokens.slice(0, range.start);
+        const after = this.tokens.slice(range.end);
+
+        const newBase = this._isWrappedNegativeOperand(baseTokens)
+          ? baseTokens.slice(2, -1).map((t) => ({ ...t }))
+          : (() => {
+              const isExp = Boolean(baseTokens[0]?.isExponent);
+              return [
+                makeToken('(', 'lparen', { isExponent: isExp }),
+                makeToken('-', 'operator', { isExponent: isExp }),
+                ...baseTokens,
+                makeToken(')', 'rparen', { isExponent: isExp }),
+              ];
+            })();
+
+        this.tokens = [...before, ...newBase, ...tailTokens, ...after];
+        return;
+      }
+    }
+
     const first = this.tokens[range.start];
     if (first.kind === 'operator' && first.char === '-') {
       // Already negative: remove the unary minus.
@@ -685,10 +807,7 @@ export class CalculatorState {
     this._clearErrorIfNeeded();
     this._startFreshIfShowingResult();
 
-    const last = this.tokens[this.tokens.length - 1];
-    if (last && (last.kind === 'digit' || last.kind === 'decimal' || last.kind === 'rparen')) {
-      this.tokens.push(makeToken('×', 'operator', { isExponent: this.exponentMode }));
-    }
+    this._ensureImplicitMultiplicationBeforeValue(true);
 
     this.tokens.push(makeToken('(', 'lparen', { isExponent: this.exponentMode }));
   }
@@ -702,12 +821,38 @@ export class CalculatorState {
     this.tokens.push(makeToken(')', 'rparen', { isExponent: this.exponentMode }));
   }
 
+  /**
+   * True when the token stream currently has an unclosed '(' that was opened
+   * while exponent-entry mode was active. Operators pressed inside such a
+   * group belong to the exponent, not to the outer expression.
+   */
+  _hasOpenExponentGroup() {
+    const stack = [];
+    for (const token of this.tokens) {
+      if (token.kind === 'lparen') stack.push(Boolean(token.isExponent));
+      else if (token.kind === 'rparen') stack.pop();
+    }
+    return stack.length > 0 && stack[stack.length - 1];
+  }
+
+  /**
+   * Re-derives exponent-entry mode from the new trailing token. A trailing
+   * '^' or a token belonging to an exponent run keeps exponent mode active.
+   */
+  _recomputeExponentMode() {
+    const last = this.tokens[this.tokens.length - 1];
+    this.exponentMode = Boolean(
+      last && ((last.kind === 'operator' && last.char === '^') || last.isExponent)
+    );
+  }
+
   /** Backspace: removes one character, honoring the two-state display rules. */
   backspace() {
     if (this.isError) {
       this.errorMessage = null;
       this.displayState = DisplayState.ENTRY;
       if (this.tokens.length > 0) this.tokens.pop();
+      this._recomputeExponentMode();
       return;
     }
 
@@ -716,25 +861,17 @@ export class CalculatorState {
       this.tokens = this._tokensFromString(this.resultString || '');
       this.displayState = DisplayState.ENTRY;
       this.resultString = null;
-      this.exponentMode = false;
       if (this.tokens.length > 0) {
         this.tokens.pop();
       }
+      this._recomputeExponentMode();
       return;
     }
 
     if (this.tokens.length === 0) return;
 
-    const removed = this.tokens.pop();
-    if (removed.kind === 'operator' && removed.char === '^') {
-      this.exponentMode = false;
-    }
-    // Recompute exponentMode based on whether the new trailing run is
-    // still marked as exponent content or follows a hidden '^' operator.
-    const last = this.tokens[this.tokens.length - 1];
-    this.exponentMode = Boolean(
-      last && ((last.kind === 'operator' && last.char === '^') || last.isExponent)
-    );
+    this.tokens.pop();
+    this._recomputeExponentMode();
   }
 
   /** AC: full reset. */
@@ -758,53 +895,84 @@ export class CalculatorState {
    * Restores a full expression + result pair (e.g. from a tapped
    * History entry) and displays it as a finished calculation (State
    * B), exactly as if '=' had just been pressed.
+   * Malformed or empty token arrays fall back to the legacy result-only path.
    * @param {Array<object>} tokens - expression tokens to restore
    * @param {string} result - formatted result string
    */
   loadFromHistory(tokens, result) {
-    this.tokens = tokens.map((t) => ({ ...t }));
+    const safeTokens = Array.isArray(tokens) ? tokens.filter(isValidToken) : [];
+    if (safeTokens.length === 0 || safeTokens.length !== tokens.length) {
+      return this.loadResultOnly(result);
+    }
+    this.tokens = safeTokens.map((t) => ({ ...t }));
     this.resultString = result;
     this.displayState = DisplayState.RESULT;
     this.exponentMode = false;
     this.errorMessage = null;
+    return true;
+  }
+
+  /**
+   * Legacy history restore: rebuilds an editable expression from a stored
+   * result string. Encapsulates token reconstruction so app.js never mutates
+   * private state (AUD-016).
+   * @param {string} result
+   * @returns {boolean} false when the result cannot be converted to tokens
+   */
+  loadResultOnly(result) {
+    const tokens = this._tokensFromString(result);
+    if (tokens.length === 0) return false;
+    this.tokens = tokens;
+    this.resultString = null;
+    this.displayState = DisplayState.ENTRY;
+    this.exponentMode = false;
+    this.errorMessage = null;
+    return true;
   }
 
   /**
    * =: evaluates the current expression. Auto-closes any unclosed
    * parentheses before evaluating (documented ambiguity resolution;
    * see README).
+   *
+   * Evaluation runs on a working copy: auto-closed parentheses (and the
+   * convenience trailing-operator trim) are committed to the live token
+   * stream only when evaluation succeeds (NEW-002).
    */
   evaluate() {
     if (this.isEmpty) return;
 
+    const workingTokens = this.tokens.map((t) => ({ ...t }));
+
     // Preserve incomplete powers and unary exponent signs; only retain the
     // established convenience behavior for a trailing binary arithmetic op.
-    const last = this.tokens[this.tokens.length - 1];
+    const last = workingTokens[workingTokens.length - 1];
     if (last?.kind === 'operator') {
       const isExponentSyntax = last.char === '^' || last.isExponent;
-      const isBinaryArithmetic = ['+', '-', '×', '÷'].includes(last.char) && !last.isExponent;
+      const isBinaryArithmetic = BINARY_ARITHMETIC_OPERATORS.has(last.char) && !last.isExponent;
       if (isExponentSyntax || !isBinaryArithmetic) {
         this.errorMessage = 'Incomplete expression';
         return { success: false, error: this.errorMessage };
       }
-      this.tokens.pop();
+      workingTokens.pop();
     }
 
-    if (this.isEmpty) return;
+    if (workingTokens.length === 0) return;
 
     const openParenFlags = [];
-    for (const token of this.tokens) {
+    for (const token of workingTokens) {
       if (token.kind === 'lparen') openParenFlags.push(Boolean(token.isExponent));
       else if (token.kind === 'rparen') openParenFlags.pop();
     }
     while (openParenFlags.length) {
-      this.tokens.push(makeToken(')', 'rparen', { isExponent: openParenFlags.pop() }));
+      workingTokens.push(makeToken(')', 'rparen', { isExponent: openParenFlags.pop() }));
     }
 
-    const expr = this.rawExpression;
+    const expr = this._rawExpressionFromTokens(workingTokens);
 
     try {
       const result = evaluateExpression(expr);
+      this.tokens = workingTokens;
       this.resultString = result;
       this.displayState = DisplayState.RESULT;
       this.exponentMode = false;
@@ -844,7 +1012,7 @@ export class CalculatorState {
     if (str.includes('e') || str.includes('E')) {
       const absNum = Math.abs(num);
       if (absNum >= 1e-15 && absNum < 1e20) {
-        const decimals = absNum < 1 ? 20 : Math.max(0, 12 - Math.floor(Math.log10(absNum)) - 1);
+        const decimals = absNum < 1 ? 20 : Math.max(0, SIGNIFICANT_DIGITS - Math.floor(Math.log10(absNum)) - 1);
         const fixed = num.toFixed(Math.min(decimals, 20));
         const cleaned = fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed;
         if (!cleaned.includes('e') && cleaned !== '0' && cleaned !== '-0') {

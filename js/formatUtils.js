@@ -25,7 +25,15 @@ const SUPERSCRIPT_MAP = {
   ')': '⁾',
 };
 
-function isEnclosedInParensString(str) {
+/**
+ * Returns true when a string is wrapped in a single matching pair of
+ * parentheses that encloses the whole string (e.g. "(1+3)" but not
+ * "(1)+(3)"). Shared by expression serialization and clipboard formatting.
+ * @param {string} str
+ * @returns {boolean}
+ */
+export function isEnclosedInParens(str) {
+  if (typeof str !== 'string') return false;
   if (!str.startsWith('(') || !str.endsWith(')')) return false;
   let depth = 0;
   for (let i = 0; i < str.length; i += 1) {
@@ -36,6 +44,26 @@ function isEnclosedInParensString(str) {
     }
   }
   return depth === 0;
+}
+
+const TOKEN_KINDS = new Set(['digit', 'decimal', 'operator', 'lparen', 'rparen']);
+
+/**
+ * Validates the shape of a persisted/restored expression token. Used at the
+ * storage trust boundary and when reloading history into calculator state.
+ * @param {unknown} token
+ * @returns {boolean}
+ */
+export function isValidToken(token) {
+  return Boolean(
+    token &&
+      typeof token === 'object' &&
+      typeof token.char === 'string' &&
+      token.char.length === 1 &&
+      TOKEN_KINDS.has(token.kind) &&
+      typeof token.isExponent === 'boolean' &&
+      typeof token.hidden === 'boolean'
+  );
 }
 
 /**
@@ -65,7 +93,7 @@ export function tokensToClipboardText(tokens) {
         i += 1;
       }
       if (expChars.length > 0) {
-        if (expChars.startsWith('(') && expChars.endsWith(')') && isEnclosedInParensString(expChars)) {
+        if (expChars.startsWith('(') && expChars.endsWith(')') && isEnclosedInParens(expChars)) {
           out += `^${expChars}`;
         } else {
           out += `^(${expChars})`;

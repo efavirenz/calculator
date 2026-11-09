@@ -41,7 +41,7 @@ test('Trailing operator auto-trimming on evaluation', () => {
 });
 
 test('Paste parses unary minus transactionally and preserves binary operators', () => {
-  for (const [input, expected] of [['2×-3', '-6'], ['2÷-3', '-0.666666666667'], ['1+-2', '-1'], ['1--2', '3']]) {
+  for (const [input, expected] of [['2×-3', '-6'], ['2÷-3', '-0.666666666666667'], ['1+-2', '-1'], ['1--2', '3']]) {
     const state = new CalculatorState();
     assert.equal(state.pasteExpression(input), true, input);
     assert.equal(state.evaluate().success, true, input);
@@ -273,20 +273,20 @@ test('loadFromHistory restores tokens and state correctly (T-001)', () => {
   assert.equal(outcome.result, '12');
 });
 
-test('pasteNumber pastes integer into empty state', () => {
+test('pasteExpression pastes integer into empty state', () => {
   const state = new CalculatorState();
-  const ok = state.pasteNumber('12345');
+  const ok = state.pasteExpression('12345');
   assert.equal(ok, true);
   assert.equal(state.rawExpression, '12345');
 });
 
-test('pasteNumber pastes decimal and formatted currency into expression', () => {
+test('pasteExpression pastes decimal and formatted currency into expression', () => {
   const state = new CalculatorState();
   state.inputDigit('1');
   state.inputDigit('0');
   state.inputOperator('+');
 
-  const ok = state.pasteNumber('$1,234.50');
+  const ok = state.pasteExpression('$1,234.50');
   assert.equal(ok, true);
   assert.equal(state.rawExpression, '10+1234.50');
 
@@ -295,9 +295,9 @@ test('pasteNumber pastes decimal and formatted currency into expression', () => 
   assert.equal(outcome.result, '1244.5');
 });
 
-test('pasteNumber pastes negative numbers correctly', () => {
+test('pasteExpression pastes negative numbers correctly', () => {
   const state = new CalculatorState();
-  const ok = state.pasteNumber('-50.25');
+  const ok = state.pasteExpression('-50.25');
   assert.equal(ok, true);
   assert.equal(state.rawExpression, '-50.25');
 });
@@ -337,7 +337,7 @@ test('pasteExpression appends equation to existing expression', () => {
   assert.equal(outcome.result, '41');
 });
 
-test('pasteNumber starts fresh when in RESULT display state', () => {
+test('pasteExpression starts fresh when in RESULT display state', () => {
   const state = new CalculatorState();
   state.inputDigit('5');
   state.inputOperator('+');
@@ -345,7 +345,7 @@ test('pasteNumber starts fresh when in RESULT display state', () => {
   state.evaluate();
   assert.equal(state.displayState, DisplayState.RESULT);
 
-  const ok = state.pasteNumber('99');
+  const ok = state.pasteExpression('99');
   assert.equal(ok, true);
   assert.equal(state.displayState, DisplayState.ENTRY);
   assert.equal(state.rawExpression, '99');
@@ -389,38 +389,23 @@ test('exponent mode persists across operators and parentheses', () => {
 
   const outcome = state.evaluate();
   assert.equal(outcome.success, true);
-  assert.equal(outcome.result, '1.44224957031');
+  assert.equal(outcome.result, '1.44224957030741');
 });
 
-test('exponent mode persists with binary plus/minus and backspace recomputation', () => {
+test('binary arithmetic operators close exponent mode (NEW-001)', () => {
   const state = new CalculatorState();
-  state.inputDigit('2');
+  state.inputDigit('5');
   state.inputPower();
-  state.inputDigit('3');
+  state.inputDigit('2');
+  assert.equal(state.exponentMode, true);
+
   state.inputOperator('+');
-  state.inputDigit('1');
-
-  assert.equal(state.rawExpression, '2^(3+1)');
-  const plusToken = state.tokens[state.tokens.length - 2];
-  assert.equal(plusToken.char, '+');
-  assert.equal(plusToken.isExponent, true);
-
-  // Backspace digit 1 -> trailing token is now '+' with isExponent: true
-  state.backspace();
-  assert.equal(state.exponentMode, true);
-
-  // Backspace operator '+' -> trailing token is now '3' with isExponent: true
-  state.backspace();
-  assert.equal(state.exponentMode, true);
-
-  // Backspace digit '3' -> trailing token is now '^'
-  state.backspace();
-  assert.equal(state.exponentMode, true);
-
-  // Backspace '^' -> exponent mode should now be false
-  state.backspace();
   assert.equal(state.exponentMode, false);
-  assert.equal(state.rawExpression, '2');
+  assert.equal(state.tokens[state.tokens.length - 1].isExponent, false);
+
+  state.inputDigit('3');
+  assert.equal(state.rawExpression, '5^(2)+3');
+  assert.equal(state.evaluate().result, '28');
 });
 
 test('pressing xʸ again exits exponent mode back to normal', () => {
@@ -483,12 +468,8 @@ test('isPowerEnabled correctly enables only for numbers and exponent toggle-off'
   assert.equal(state.isPowerEnabled, true);
   assert.equal(state.exponentMode, true);
 
-  // Operator inside exponent -> enabled while in exponentMode
+  // Operator at exponent top level closes exponent mode -> trailing operator
   state.inputOperator('+');
-  assert.equal(state.isPowerEnabled, true);
-
-  // Toggle off exponent mode -> now ends in operator '+', so disabled
-  state.inputPower();
   assert.equal(state.exponentMode, false);
   assert.equal(state.isPowerEnabled, false);
 
@@ -599,28 +580,32 @@ test('1/x button wraps operand as (1÷x) and computes accurately', () => {
   assert.equal(outcome.result, '0.2');
 });
 
-test('exponent calculation evaluates 9^1/3 as 9^(1/3) = 2.08008382305', () => {
+test('exponent calculation evaluates 9^(1÷3) as 2.0800838230519', () => {
   const state = new CalculatorState();
   state.inputDigit('9');
   state.inputPower();
+  state.inputOpenParen();
   state.inputDigit('1');
   state.inputOperator('÷');
   state.inputDigit('3');
+  state.inputCloseParen();
 
   assert.equal(state.rawExpression, '9^(1÷3)');
   const outcome = state.evaluate();
   assert.equal(outcome.success, true);
-  assert.equal(outcome.result, '2.08008382305');
+  assert.equal(outcome.result, '2.0800838230519');
 });
 
-test('exponent calculation evaluates 16^1/4 as 16^(1/4) = 2', () => {
+test('exponent calculation evaluates 16^(1÷4) as 2', () => {
   const state = new CalculatorState();
   state.inputDigit('1');
   state.inputDigit('6');
   state.inputPower();
+  state.inputOpenParen();
   state.inputDigit('1');
   state.inputOperator('÷');
   state.inputDigit('4');
+  state.inputCloseParen();
 
   assert.equal(state.rawExpression, '16^(1÷4)');
   const outcome = state.evaluate();
@@ -745,7 +730,7 @@ test('1/x button in exponent mode creates superscript (1÷x) and unwraps accurat
   // Evaluates to 9^(1/3) = 2.08008382305
   const outcome = state.evaluate();
   assert.equal(outcome.success, true);
-  assert.equal(outcome.result, '2.08008382305');
+  assert.equal(outcome.result, '2.0800838230519');
 
   // Test unwrap in exponent mode: 9 -> power -> 3 -> 1/x -> 1/x -> 9^3
   state.clearAll();
@@ -933,7 +918,7 @@ test('inputReciprocal wraps compound expression starting with 1÷ rather than co
   const outcome = state.evaluate();
   assert.equal(outcome.success, true);
   // (1 / 2.2) ~ 0.454545454545
-  assert.equal(outcome.result, '0.454545454545');
+  assert.equal(outcome.result, '0.454545454545455');
 });
 
 test('inputOperator ignores binary operators directly following open parenthesis (BUG-006)', () => {
@@ -985,45 +970,193 @@ test('_tokensFromString preserves extreme large and small scientific notation in
   assert.equal(state2.evaluate().result, '1');
 });
 
-test('Paste parses unary minus transactionally and preserves binary operators', () => {
-  for (const [input, expected] of [['2×-3', '-6'], ['2÷-3', '-0.666666666667'], ['1+-2', '-1'], ['1--2', '3']]) {
-    const state = new CalculatorState();
-    assert.equal(state.pasteExpression(input), true, input);
-    assert.equal(state.evaluate().success, true, input);
-    assert.equal(state.resultString, expected, input);
-  }
-  const state = new CalculatorState(); state.inputDigit('8'); state.inputOperator('+'); state.inputOperator('×');
-  assert.equal(state.rawExpression, '8×');
+function runActions(actions) {
+  const state = new CalculatorState();
+  for (const [method, ...args] of actions) state[method](...args);
+  return state;
+}
+
+test('backspace after an incomplete power clears stale exponent mode (AUD-003)', () => {
+  const state = runActions([['inputDigit', '5'], ['inputPower']]);
+  assert.equal(state.evaluate().success, false);
+  assert.equal(state.exponentMode, true);
+
+  state.backspace();
+  assert.equal(state.exponentMode, false);
+  assert.equal(state.rawExpression, '5');
+
+  state.inputDigit('3');
+  assert.equal(state.tokens[state.tokens.length - 1].isExponent, false);
+  assert.equal(state.rawExpression, '53');
+  assert.equal(state.evaluate().result, '53');
 });
 
-test('Paste rejects over-limit and malformed scientific input without changing state', () => {
-  const state = new CalculatorState(); state.inputDigit('9'); const before = state.rawExpression;
-  assert.equal(state.pasteExpression('1234567890123456'), false);
-  assert.equal(state.pasteExpression('1.1234567890123456'), false);
-  for (const value of ['1e', '1e+', '1e--2', '1e2e3']) assert.equal(state.pasteExpression(value), false, value);
+test('backspace on a scientific result re-derives exponent mode (AUD-003)', () => {
+  const state = new CalculatorState();
+  state.resultString = '1e+25';
+  state.displayState = DisplayState.RESULT;
+
+  state.backspace();
+  assert.equal(state.displayState, DisplayState.ENTRY);
+  assert.equal(state.exponentMode, true);
+
+  state.inputDigit('9');
+  assert.equal(state.rawExpression, '1×10^(29)');
+});
+
+test('pseudo-random backspace sequences keep exponentMode derived from the new tail', () => {
+  let seed = 0x5eed;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const ops = ['+', '-', '×', '÷'];
+  const actions = [
+    (s) => s.inputDigit(String(Math.floor(random() * 10))),
+    (s) => s.inputDecimal(),
+    (s) => s.inputOperator(ops[Math.floor(random() * ops.length)]),
+    (s) => s.inputPower(),
+    (s) => s.inputOpenParen(),
+    (s) => s.inputCloseParen(),
+    (s) => s.inputReciprocal(),
+    (s) => s.toggleSign(),
+    (s) => s.backspace(),
+    (s) => s.evaluate(),
+  ];
+
+  for (let run = 0; run < 120; run += 1) {
+    const state = new CalculatorState();
+    for (let step = 0; step < 40; step += 1) {
+      const action = actions[Math.floor(random() * actions.length)];
+      const wasBackspace = action === actions[8];
+      action(state);
+      if (!wasBackspace) continue;
+      const last = state.tokens[state.tokens.length - 1];
+      const expected = Boolean(last && ((last.kind === 'operator' && last.char === '^') || last.isExponent));
+      assert.equal(state.exponentMode, expected, `raw=${state.rawExpression}`);
+    }
+  }
+});
+
+test('binary arithmetic operators close a top-level exponent run (NEW-001)', () => {
+  for (const operator of ['+', '-', '×', '÷']) {
+    const state = runActions([['inputDigit', '5'], ['inputPower'], ['inputDigit', '2']]);
+    assert.equal(state.exponentMode, true);
+    state.inputOperator(operator);
+    assert.equal(state.exponentMode, false, operator);
+    assert.equal(state.tokens[state.tokens.length - 1].isExponent, false, operator);
+  }
+
+  const addition = runActions([['inputDigit', '5'], ['inputPower'], ['inputDigit', '2'], ['inputOperator', '+'], ['inputDigit', '3']]);
+  assert.equal(addition.rawExpression, '5^(2)+3');
+  assert.equal(addition.evaluate().result, '28');
+});
+
+test('arithmetic inside an explicitly opened exponent group stays in the exponent', () => {
+  const state = runActions([
+    ['inputDigit', '9'], ['inputPower'], ['inputOpenParen'], ['inputDigit', '1'],
+    ['inputOperator', '÷'], ['inputDigit', '3'], ['inputCloseParen'],
+  ]);
+  assert.equal(state.exponentMode, true);
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.result, '2.0800838230519');
+});
+
+test('digit and decimal after exiting exponent mode imply multiplication (AUD-004)', () => {
+  const digitState = runActions([
+    ['inputDigit', '2'], ['inputPower'], ['inputDigit', '3'], ['inputPower'], ['inputDigit', '4'],
+  ]);
+  assert.equal(digitState.exponentMode, false);
+  assert.equal(digitState.rawExpression, '2^(3)×4');
+  assert.equal(digitState.evaluate().result, '32');
+
+  const decimalState = runActions([
+    ['inputDigit', '1'], ['inputDecimal'], ['inputDigit', '5'], ['inputPower'],
+    ['inputDigit', '2'], ['inputPower'], ['inputDecimal'], ['inputDigit', '5'],
+  ]);
+  assert.equal(decimalState.rawExpression, '1.5^(2)×0.5');
+  assert.equal(decimalState.evaluate().result, '1.125');
+});
+
+test('paste combination inserts implicit multiplication instead of concatenating (AUD-002)', () => {
+  const cases = [
+    { existing: [['inputDigit', '5']], pasted: '12345', raw: '5×12345', result: '61725' },
+    { existing: [['inputDigit', '5']], pasted: '2+3', raw: '5×2+3', result: '13' },
+    { existing: [['inputDigit', '2'], ['inputOperator', '+'], ['inputDigit', '3']], pasted: '4', raw: '2+3×4', result: '14' },
+    { existing: [['inputDigit', '1'], ['inputDigit', '0']], pasted: '(2+3)×4', raw: '10×(2+3)×4', result: '200' },
+    { existing: [['inputDigit', '1'], ['inputDigit', '0'], ['inputOperator', '+']], pasted: '(2+3)×4', raw: '10+(2+3)×4', result: '30' },
+    { existing: [['inputDigit', '5'], ['inputOperator', '+']], pasted: '3', raw: '5+3', result: '8' },
+  ];
+
+  for (const testCase of cases) {
+    const state = runActions(testCase.existing);
+    assert.equal(state.pasteExpression(testCase.pasted), true, testCase.pasted);
+    assert.equal(state.rawExpression, testCase.raw, testCase.pasted);
+    assert.equal(state.evaluate().result, testCase.result, testCase.pasted);
+  }
+});
+
+test('paste reports specific rejection reasons (AUD-002/AUD-021)', () => {
+  assert.deepEqual(new CalculatorState().pasteExpressionWithReason(''), { success: false, reason: 'empty' });
+  assert.equal(new CalculatorState().pasteExpressionWithReason('abc').reason, 'invalid');
+  assert.equal(new CalculatorState().pasteExpressionWithReason('1234,567').reason, 'ambiguous');
+  assert.equal(new CalculatorState().pasteExpressionWithReason('1234567890123456').reason, 'too-long');
+});
+
+test('paste normalizes Unicode dashes and accepts syntax-valid error expressions (AUD-021)', () => {
+  const unicodeMinus = new CalculatorState();
+  assert.equal(unicodeMinus.pasteExpression('5−3'), true);
+  assert.equal(unicodeMinus.rawExpression, '5-3');
+
+  for (const expression of ['1÷0', '10^400', '(-2)^0.5']) {
+    assert.equal(new CalculatorState().pasteExpression(expression), true, expression);
+  }
+
+  const localeAware = new CalculatorState();
+  assert.equal(localeAware.pasteExpression('1.234,56'), true);
+  assert.equal(localeAware.rawExpression, '1234.56');
+});
+
+test('sign toggle on a trailing power negates the base (AUD-014)', () => {
+  const afterPower = runActions([
+    ['inputDigit', '5'], ['inputPower'], ['inputDigit', '2'], ['inputPower'], ['toggleSign'],
+  ]);
+  assert.equal(afterPower.rawExpression, '(-5)^(2)');
+  assert.equal(afterPower.evaluate().result, '25');
+
+  const beforePower = runActions([['inputDigit', '5'], ['toggleSign'], ['inputPower'], ['inputDigit', '2']]);
+  assert.equal(beforePower.rawExpression, '(-5)^(2)');
+  assert.equal(beforePower.evaluate().result, '25');
+
+  const toggledTwice = runActions([
+    ['inputDigit', '5'], ['inputPower'], ['inputDigit', '2'], ['inputPower'], ['toggleSign'], ['toggleSign'],
+  ]);
+  assert.equal(toggledTwice.rawExpression, '5^(2)');
+  assert.equal(toggledTwice.evaluate().result, '25');
+});
+
+test('failed evaluation does not commit auto-closed parentheses (NEW-002)', () => {
+  const state = runActions([
+    ['inputOpenParen'], ['inputDigit', '5'], ['inputOperator', '÷'], ['inputDigit', '0'],
+  ]);
+  const before = state.rawExpression;
+  const outcome = state.evaluate();
+  assert.equal(outcome.success, false);
+  assert.equal(outcome.error, 'Division by zero');
+  assert.equal(state.tokens.length, 4);
   assert.equal(state.rawExpression, before);
+
+  state.backspace();
+  assert.equal(state.rawExpression, '(5÷');
 });
 
-test('Paste accepts scientific notation and round-trips values', () => {
-  for (const [input, expected] of [['1e+20', '1e+20'], ['-1.25e-8', '-1.25e-8'], ['2.5E+3', '2500']]) {
-    const state = new CalculatorState();
-    assert.equal(state.pasteExpression(input), true, input);
-    assert.equal(state.evaluate().success, true, input);
-    assert.equal(state.resultString, expected, input);
-  }
-});
+test('loadResultOnly encapsulates legacy history restoration without private mutation (AUD-016)', () => {
+  const state = new CalculatorState();
+  assert.equal(state.loadResultOnly('42'), true);
+  assert.equal(state.displayState, DisplayState.ENTRY);
+  assert.equal(state.rawExpression, '42');
 
-test('Incomplete power expressions fail without losing source tokens', () => {
-  const state = new CalculatorState(); state.inputDigit('2'); state.inputPower();
-  const before = state.rawExpression; const outcome = state.evaluate();
-  assert.equal(outcome.success, false); assert.equal(state.rawExpression, before);
-});
-
-test('Digit and decimal entry after closing parenthesis imply multiplication', () => {
-  const digitState = new CalculatorState();
-  digitState.inputOpenParen(); digitState.inputDigit('2'); digitState.inputCloseParen(); digitState.inputDigit('3');
-  assert.equal(digitState.rawExpression, '(2)×3'); assert.equal(digitState.evaluate().result, '6');
-  const decimalState = new CalculatorState();
-  decimalState.inputOpenParen(); decimalState.inputDigit('2'); decimalState.inputCloseParen(); decimalState.inputDecimal(); decimalState.inputDigit('5');
-  assert.equal(decimalState.rawExpression, '(2)×0.5'); assert.equal(decimalState.evaluate().result, '1');
+  assert.equal(state.loadResultOnly('not-a-number'), false);
+  assert.equal(state.rawExpression, '42');
 });

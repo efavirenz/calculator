@@ -54,7 +54,8 @@ calculator/
 │   ├── parser.test.js         # Tokenizer, Shunting Yard, RPN eval tests
 │   ├── state.test.js          # CalculatorState transitions & behavior tests
 │   ├── inputController.test.js # Keyboard / transient UI tests
-│   └── storage.test.js        # Persistence and quota recovery tests
+│   ├── pwa.test.js            # Precache/version/manifest static integrity tests
+│   └── storage.test.js        # Persistence, validation and quota recovery tests
 ├── requirements-dev.txt       # Optional pinned Pillow dependency for icon generation
 └── icons/                     # Generated icon files
 ```
@@ -82,6 +83,6 @@ calculator/
   2. `#version-badge` text in `index.html`
   3. Version shield and release notes in `README.md`
   4. Current release summary in this `AGENTS.md` file
-- **Current Release**: v7.11 (2026-11-07), with 86 passing Node tests. Keypad actions dispatch on primary `pointerdown`; the click fallback handles only `detail === 0` keyboard/assistive/programmatic activation. Pointer-activated buttons suppress the visual focus ring, and `.btn:focus` resets the browser-native outline while the custom `:focus-visible` indicator remains available for keyboard navigation. Keyboard interaction and focus departure clear the pointer-only marker. The v7.9 iPhone Safari and installed-PWA interaction validation passed; the v7.11 focus-ring CSS fix must be manually rechecked on iPhone Safari/PWA. See `README.md` section 15 for release details. The update flow must target only the Calculator service-worker scope and must not clear unrelated origin registrations or caches.
+- **Current Release**: v7.12 (2026-11-09), with 110 passing Node tests. Display precision is 15 significant digits, matching input acceptance. Binary arithmetic closes top-level exponent mode; backspace re-derives exponent mode; value-adjacent pastes insert `×`; `+/-` on a power negates the base; failed evaluation does not mutate tokens. History is validated/capped at the storage boundary and reconciled across tabs. The history drawer is `inert` when closed with a CSS visibility fallback; display lines and the clipboard menu are keyboard-operable; focused buttons keep native `Enter`/`Space`. The service worker precaches core assets fail-hard and optional icons fail-soft, returns an explicit `504` offline response, and the version badge reloads only after a new worker activates. CI runs tests and a dynamic-code grep, then publishes only staged app files. The update flow must target only the Calculator service-worker scope and must not clear unrelated origin registrations or caches. The v7.11 focus-ring CSS change and the v7.12 touch/drawer/a11y/PWA changes still require manual confirmation on iPhone Safari/PWA. See `README.md` section 15 for release details.
 - **Relative URLs & Subpath Deployment**: Maintain relative paths (`./...`) across all asset/script references for GitHub Pages subpath compatibility (`https://<username>.github.io/<reponame>/`). Never use root-relative paths (`/...`).
 - **Local Serving**: ES modules and Service Worker require HTTP/HTTPS origin (`python3 -m http.server 8080` or `npx serve .`). Opening via `file://` fails.

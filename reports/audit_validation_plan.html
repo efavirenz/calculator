@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Audit Validation &amp; Remediation Plan — Calculator PWA</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#000; color:#e8e8ea; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.55; margin:0; padding:2rem 1rem; }
+  main { max-width: 62rem; margin: 0 auto; }
+  h1,h2,h3 { color:#fff; line-height:1.25; }
+  h1 { font-size:1.9rem; border-bottom:1px solid #333; padding-bottom:.4rem; }
+  h2 { font-size:1.35rem; margin-top:2.6rem; border-bottom:1px solid #2a2a2a; padding-bottom:.3rem; }
+  h3 { font-size:1.1rem; margin-top:1.8rem; }
+  code { background:#1c1c1e; padding:.1em .4em; border-radius:4px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.92em; color:#ffd479; }
+  pre { background:#111; border:1px solid #2a2a2a; padding:.9rem 1rem; border-radius:10px; overflow-x:auto; font-size:.86rem; color:#d6dde6; }
+  pre code { background:none; padding:0; color:inherit; }
+  table { border-collapse:collapse; width:100%; margin:1rem 0; font-size:.92rem; }
+  th,td { border:1px solid #2a2a2a; padding:.5rem .65rem; text-align:left; vertical-align:top; }
+  th { background:#1c1c1e; color:#fff; }
+  .ok { color:#5ad468; font-weight:600; }
+  .meta { color:#9a9aa0; font-size:.95rem; }
+  .tag { display:inline-block; background:#1c1c1e; border:1px solid #333; border-radius:999px; padding:.05rem .6rem; font-size:.8rem; margin-right:.35rem; }
+  .pos { border-color:#2a5432; color:#7fe08a; }
+  .sev { border-color:#454545; }
+  ul { padding-left:1.25rem; }
+  hr { border:none; border-top:1px solid #222; margin:2.5rem 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Audit Validation &amp; Remediation Plan — Calculator PWA</h1>
+<p class="meta">Validation date: 2026-11-08 · Validates <code>reports/audit.md</code> (HEAD <code>808ac42</code>, v7.11) · Test suite: 86 pass / 0 fail · No application code was modified.</p>
+
+<h2>Executive Summary</h2>
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Total findings in <code>reports/audit.md</code></td><td><strong>25</strong></td></tr>
+<tr><td>Findings Confirmed</td><td><strong class="ok">21</strong> (incl. AUD-022…025, whose "False Positive" verdicts were independently validated as correct)</td></tr>
+<tr><td>Findings Partially Confirmed</td><td><strong>0</strong></td></tr>
+<tr><td>Findings Rejected</td><td><strong>0</strong></td></tr>
+<tr><td>New findings discovered</td><td><strong>6</strong> (NEW-001…NEW-006)</td></tr>
+<tr><td>Total issues requiring remediation</td><td><strong>27</strong></td></tr>
+</table>
+<ul>
+  <li>The audit report is <strong>highly accurate</strong>: every runtime reproduction claimed in it was independently reproduced with identical results; all code-inspection findings check out against the source.</li>
+  <li><strong>AUD-001</strong> is the most important defect — <code>formatNumber()</code> rounds results to 12 significant digits while input accepts up to 15, silently corrupting user-entered values (<code>1234567890123 → 1234567890120</code>; chained <code>+1</code> still yields <code>1234567890120</code>).</li>
+  <li>Six additional issues were found, most notably <strong>NEW-001</strong>: arithmetic operators pressed during exponent-entry are absorbed into the exponent (<code>5 xʸ 2 + 3 =</code> → <code>5^(2+3)</code> = <strong>3125</strong>, not 28).</li>
+</ul>
+
+<h2>Audit Findings Validation</h2>
+<p>Each finding was re-verified against the actual codebase and, where functional, re-executed against the real ES modules under Node.</p>
+
+<table>
+<tr><th>ID</th><th>Severity</th><th>Validation</th><th>Summary of verification</th></tr>
+<tr><td><strong>AUD-001</strong> 12-digit rounding corrupts 13–15 digit inputs</td><td>High</td><td class="ok">Confirmed (runtime)</td><td><code>toPrecision(12)</code> at <code>expressionParser.js:260</code> vs <code>MAX_DIGITS_BEFORE_DECIMAL=15</code>. Reproduced both corruption values and the chained <code>+1</code> poverty case; matches the audit exactly.</td></tr>
+<tr><td><strong>AUD-002</strong> Paste concatenates / rejects parenthesized pastes</td><td>Medium</td><td class="ok">Confirmed (runtime)</td><td><code>pasteExpression()</code> inserts <code>×</code> only after <code>rparen</code>. All five audit rows reproduced: <code>5+12345→512345</code>, <code>5+2+3→55</code>, <code>2+3+4→36</code>, <code>10+(2+3)×4 → REJECTED</code>, <code>10+(2+3)×4 → accepted</code>.</td></tr>
+<tr><td><strong>AUD-003</strong> Stale exponent mode after error+backspace</td><td>Medium</td><td class="ok">Confirmed (runtime)</td><td>Error branch of <code>backspace()</code> (<code>calculatorState.js:707</code>) lacks the recompute the normal branch has. Reproduced: tokens <code>[5]</code>, <code>exponentMode=true</code>; next digit renders <code>5³</code> while <code>=</code> yields <code>53</code>.</td></tr>
+<tr><td><strong>AUD-004</strong> Exiting exponent mode → unparseable expressions</td><td>Low</td><td class="ok">Confirmed (runtime)</td><td>Reproduced <code>2^(3)4</code> → "Invalid expression" and <code>1.5^(2).</code> → "Malformed decimal number".</td></tr>
+<tr><td><strong>AUD-005</strong> Global touchmove veto blocks pinch-zoom</td><td>Medium</td><td class="ok">Confirmed</td><td><code>app.js:63-72</code> document-level non-passive veto; viewport has no <code>user-scalable=no</code>. CSS containment (<code>position:fixed</code>, <code>overscroll-behavior:none</code>, <code>touch-action:manipulation</code>) already exists — removal is viable after iOS revalidation.</td></tr>
+<tr><td><strong>AUD-006</strong> Global Enter steals focused-button activation</td><td>Medium</td><td class="ok">Confirmed</td><td><code>KEY_TO_ACTION.Enter='equals'</code> + unconditional <code>preventDefault()</code>; guards omit <code>button</code>. Native Enter click suppressed; Space unaffected (unmapped key). Matches audit.</td></tr>
+<tr><td><strong>AUD-007</strong> History drawer tabbable while off-screen/aria-hidden</td><td>Medium</td><td class="ok">Confirmed</td><td>Hiding is transform-only (<code>style.css:329-349</code>); <code>aria-hidden</code> separately maintained; focus only moved on open; <code>tabIndex=0</code> rows; no focus restore on close.</td></tr>
+<tr><td><strong>AUD-008</strong> Copy/Paste & recall pointer-only; menu has no focus mgmt</td><td>Low</td><td class="ok">Confirmed</td><td>Display lines are plain <code>&lt;div&gt;</code>s with click listeners (<code>index.html:49-50</code>, <code>app.js:162-172</code>); <code>showClipboardMenu()</code> moves no focus in or out.</td></tr>
+<tr><td><strong>AUD-009</strong> History load bypasses 50-cap; weak validation</td><td>Low</td><td class="ok">Confirmed (runtime)</td><td>Stubbed storage: 60 stored entries → 60 loaded; <code>{expression:'x',result:'y'}</code> accepted with missing id/timestamp. UI then renders "Invalid Date" / undefined-id selects.</td></tr>
+<tr><td><strong>AUD-010</strong> Every <code>=</code> rewrites storage; closed drawer rebuilt; duplicates</td><td>Low</td><td class="ok">Confirmed</td><td><code>onEvaluate</code> unconditionally adds + <code>renderHistory()</code> (no DocumentFragment); repeated <code>=</code> returns success each time (<code>2+2 → =,=,=</code> → 3 rows + 3 storage writes).</td></tr>
+<tr><td><strong>AUD-011</strong> SW install all-or-nothing; offline non-nav = undefined</td><td>Low</td><td class="ok">Confirmed (latent)</td><td><code>cache.addAll</code> fail-fast per spec; <code>.catch(() =&gt; undefined)</code> for non-navigation; cross-cache <code>caches.match</code> never revalidates. Currently latent — all 20 precache URLs verified to exist on disk.</td></tr>
+<tr><td><strong>AUD-012</strong> Version badge reloads unconditionally</td><td>Low</td><td class="ok">Confirmed</td><td><code>pwaBootstrap.js:40-54</code> always <code>window.location.reload()</code>, before activation is guaranteed; discards in-memory expression.</td></tr>
+<tr><td><strong>AUD-013</strong> Deploy publishes whole repo; tests never run</td><td>Low</td><td class="ok">Confirmed</td><td><code>deploy.yml</code> is a single deploy job with <code>path: "."</code>; no test step, no staging.</td></tr>
+<tr><td><strong>AUD-014</strong> Sign toggle on power changes base precedence inconsistently</td><td>Low</td><td class="ok">Confirmed (runtime)</td><td>Reproduced <code>5 xʸ 2 xʸ +/- → "-5^(2)" → -25</code> vs <code>5 +/- xʸ 2 → "(-5)^(2)" → 25</code>.</td></tr>
+<tr><td><strong>AUD-015</strong> README contradicts code; missing file</td><td>Low</td><td class="ok">Confirmed</td><td>§7 covers old exponent/1/x behaviors (<code>inputReciprocal</code> builds visible <code>(1÷operand)</code>); §8 line 230 conflicts with <code>loadFromHistory</code> full-expression restore; §2 lists <code>implementation_report.html</code> which does not exist (glob verified); §14.5/§14.6 contradict §7 internally.</td></tr>
+<tr><td><strong>AUD-016</strong> app.js reaches into private state</td><td>Low</td><td class="ok">Confirmed</td><td><code>state.tokens = state._tokensFromString(entry.result)</code> + direct <code>displayState</code> write in legacy fallback (<code>app.js:149-153</code>).</td></tr>
+<tr><td><strong>AUD-017</strong> Dead code / unused exports</td><td>Info</td><td class="ok">Confirmed</td><td>All six sub-claims verified — incl. <code>'u-'</code> in <code>RIGHT_ASSOCIATIVE</code> never consulted as incoming op (only as stack-top <code>PRECEDENCE</code> entry), <code>showCopyToast</code>/<code>SELECTORS</code> unused, <code>before</code>/<code>result</code> args ignored by app, duplicated <code>isEnclosedInParens</code>.</td></tr>
+<tr><td><strong>AUD-018</strong> Duplicate tests & untested paths</td><td>Info</td><td class="ok">Confirmed</td><td>Five duplicated test titles (counts of 2 via grep); zero test references to SW/PRECACHE/manifest; AUD-001 reproducible while suite is green.</td></tr>
+<tr><td><strong>AUD-019</strong> CSP sound for scripts; meta-only; no frame protection</td><td>Info</td><td class="ok">Confirmed</td><td><code>index.html:8</code>; <code>style-src 'unsafe-inline'</code> genuinely required by inline style writes; meta-CSP cannot set <code>frame-ancestors</code>.</td></tr>
+<tr><td><strong>AUD-020</strong> History readable on shared origin</td><td>Low</td><td class="ok">Confirmed</td><td>Plain JSON under <code>calculator.history.v1</code>; README discloses sibling-origin exposure; environmental constraint, not a code defect.</td></tr>
+<tr><td><strong>AUD-021</strong> Paste rejects valid errors, Unicode minus, EU decimals</td><td>Low</td><td class="ok">Confirmed (runtime)</td><td>Reproduced: <code>1.234,56 → 1.23456</code> (factor-1000), <code>5−3 (U+2212) → REJECTED</code>, <code>1/0</code>, <code>10^400</code>, <code>(-2)^0.5 → REJECTED</code>.</td></tr>
+<tr><td><strong>AUD-022</strong> XSS via rendering (FP)</td><td>Info</td><td class="ok">Confirmed as correct FP</td><td>Zero <code>innerHTML</code>/<code>eval</code>/<code>new Function</code> hits in code (only a doc comment); all rendering via <code>textContent</code>/<code>createTextNode</code>.</td></tr>
+<tr><td><strong>AUD-023</strong> DOM clobbering/eval injection (FP)</td><td>Info</td><td class="ok">Confirmed as correct FP</td><td>All selectors are fixed literals; paste whitelist <code>^[0-9.+\-×÷^()eE]+$</code>; no global-by-id reads.</td></tr>
+<tr><td><strong>AUD-024</strong> Quota failure fatal (FP)</td><td>Info</td><td class="ok">Confirmed as correct FP</td><td><code>saveHistory</code> halve-and-retry; <code>add()</code> rolls back the unpersisted entry; trim/failure toasts exist; tested in <code>storage.test.js</code>.</td></tr>
+<tr><td><strong>AUD-025</strong> Listener leaks (FP)</td><td>Info</td><td class="ok">Confirmed as correct FP</td><td><code>replaceChildren()</code> disposes item listeners with nodes; single dismissible module-level menu handler; toast timeout cleared.</td></tr>
+</table>
+
+<h2>New Issues Discovered</h2>
+
+<h3>NEW-001 — Operators absorbed into the exponent during exponent entry <span class="tag sev">Medium</span></h3>
+<p><code>inputOperator()</code> marks pressed binary operators <code>isExponent: true</code> while <code>exponentMode</code> is active, and <code>rawExpression()</code> collects them into the parenthesized exponent. Reproduced: <code>5 → xʸ → 2 → + → 3 → =</code> → raw <code>5^(2+3)</code> → <strong>3125</strong> (user expects 28), rendered as <code>5²⁺³</code>. Same family as AUD-003/004; conflicts with iOS-calculator muscle memory and README §7/§14.6 contradiction.<br>
+<strong>Remediation:</strong> binary arithmetic operators (<code>+ - × ÷</code>) close exponent mode (recommended), or keep + document as unified behavior, or render operators non-superscript if kept. Coordinate with the AUD-004 helper.</p>
+
+<h3>NEW-002 — evaluate() auto-closes parens even when evaluation fails <span class="tag sev">Low</span></h3>
+<p>Runtime repro: <code>(5÷0</code> + <code>=</code> → error "Division by zero", but token stream permanently gains the phantom <code>)</code> (<code>(5÷0)</code>); backspace then removes the phantom instead of the user's char; error display shows tokens the user never typed.<br>
+<strong>Remediation:</strong> evaluate a copy of the auto-closed tokens; commit only on success. Zero-UX-change.</p>
+
+<h3>NEW-003 — Forced synchronous layout in render path each keystroke <span class="tag sev">Low</span></h3>
+<p><code>autoShrinkToFit()</code> writes <code>style.fontSize</code> then reads <code>scrollWidth/clientWidth</code> (layout thrash, up to 4 forced layouts per render incl. both displays); <code>scrollToDisplayEnd()</code> adds two more read/write pairs; <code>resize</code>/<code>orientationchange</code> trigger unthrottled full re-renders.<br>
+<strong>Remediation:</strong> batch reads before writes, cache computed styles, offscreen measurement, <code>requestAnimationFrame</code>-throttled resize. Validate with DevTools Performance (no forced-sync-layout per keypress).</p>
+
+<h3>NEW-004 — Manifest locks installed PWA to portrait while landscape CSS exists <span class="tag sev">Low</span></h3>
+<p><code>manifest.json</code> <code>"orientation": "portrait"</code> vs a complete landscape 6×4 stylesheet (<code>style.css:518-609</code>) and <code>orientationchange</code> render wiring. Android standalone will lock portrait (landscape CSS dead code); iOS ignores it — inconsistent.<br>
+<strong>Remediation:</strong> set <code>"orientation": "any"</code> (recommended) or drop landscape CSS; document the choice.</p>
+
+<h3>NEW-005 — History overlay statically aria-hidden but becomes clickable when open <span class="tag sev">Low</span></h3>
+<p><code>index.html:105</code> hardcodes <code>aria-hidden="true"</code>; <code>toggleHistoryPanel()</code> never updates it while <code>.is-open</code> makes it a live click-to-close target.<br>
+<strong>Remediation:</strong> sync or drop <code>aria-hidden</code> on the overlay (fold into AUD-007 fix).</p>
+
+<h3>NEW-006 — Multi-tab history last-write-wins silently discards entries <span class="tag sev">Low</span></h3>
+<p>No <code>storage</code> event handling anywhere; two tabs each rewrite the full list and erase each other's entries written since their own last <code>=</code>.<br>
+<strong>Remediation:</strong> <code>window.addEventListener('storage', …)</code> + <code>HistoryManager.reload()</code> (using the AUD-009 validator), merging by <code>id</code>; or reload the list at minimum.</p>
+
+<h2>Remediation Plan (per issue)</h2>
+
+<table>
+<tr><th>ID</th><th>Core fix</th><th>Chosen approach &amp; alternatives</th><th>Key risks</th><th>Validation</th></tr>
+<tr><td>AUD-001 (R1)</td><td><code>formatNumber</code> → 15 significant digits; <code>toExponential(14)</code>; keep 1e15/1e-9 thresholds; regenerate dependent test strings</td><td>A: <code>toPrecision(15)</code> (rec.) · B: 17-digit roundtrip (shows float noise — worse) · C: configurable precision · D: restrict input to 15 significant digits</td><td>Display strings change slightly by design; formatter threshold interplay needs dual-side tests</td><td>Fixed-value tests (13–15 digit preservation, chaining, <code>0.1+0.2</code>, threshold edges); full suite; manual chain test</td></tr>
+<tr><td>AUD-002 (R2)</td><td>Rewrite paste combination: insert <code>×</code> whenever <code>leftIsValue && rightStartsValue</code>; reason-coded failures</td><td>A: implicit <code>×</code> (rec.) · B: replace-in-entry-mode · C: reject juxtaposition · D: confirm dialog</td><td>Digit-adjacent paste behavior changes (was silently concatenating)</td><td>Paste combination matrix unit tests; manual clipboard flows</td></tr>
+<tr><td>AUD-003 (R3)</td><td>Extract <code>_recomputeExponentMode()</code>; call in both <code>backspace()</code> branches; add isExponent invariant test</td><td>A: shared helper (rec.) · B: derived getter (touches ~15 sites — riskier)</td><td>Trivial regression risk; kills the early-return bug class</td><td>Audit's exact reproduction as a test + property test</td></tr>
+<tr><td>AUD-004 + NEW-001 (R4)</td><td><code>_ensureImplicitMultiplicationBeforeValue()</code> in digit/decimal/paren/paste; binary operators close exponent mode</td><td>A: helper + operators close exponent (rec.) · B: fix AUD-004 only · C: document absorbed-operator design</td><td>Changes documented §14.6 behavior — requires explicit maintainer decision + README + tests</td><td>AUD-004 repros become valid streams; NEW-001 → 28; reciprocal-in-exponent tests; parseability invariant loop</td></tr>
+<tr><td>AUD-005 (R5)</td><td>Remove global touchmove veto (CSS containment already present) or narrow it (multi-touch allow, dialog ancestor, cancelable check)</td><td>A: remove (rec., gated on iOS manual test) · B: narrowed listener</td><td>Needs iPhone Safari/installed-PWA revalidation (bundle with v7.11 focus-ring recheck)</td><td>Manual: pinch-zoom, dialog scroll, history scroll, rubber-band check</td></tr>
+<tr><td>AUD-006 (R6)</td><td>Early-return for Enter/Space when target is <code>button, [role="button"]</code></td><td>A: targeted early-return (rec.) · B: drop Enter from map</td><td>~none; verify Focus-on-<code>=</code>-button path is single-dispatch</td><td>InputController regression tests (fake targets); keyboard-only manual pass</td></tr>
+<tr><td>AUD-007 + NEW-005 (R7)</td><td><code>panel.inert=!open</code> + CSS visibility fallback + aria sync + focus restore to hamburger + overlay aria sync</td><td>A: inert + restore (rec.) · B: native <code>&lt;dialog&gt;</code> drawer (restyling risk)</td><td>Touch/keyboard/screen-reader flows need retesting on all close paths</td><td>VoiceOver + keyboard manual pass; all four open/close paths</td></tr>
+<tr><td>AUD-008 (R8)</td><td>Display lines <code>role="button" tabindex="0"</code> + Enter/Space handlers + aria-haspopup; menu focus-in/out; simplify menu semantics</td><td>A: interactive divs + focus mgmt (rec.) · B: real buttons · C: always-visible topbar Copy/Paste buttons</td><td>Tab-order changes; swipe-safe click path must stay pointer-only</td><td>Keyboard manual test; unit tests if view-model extraction lands</td></tr>
+<tr><td>AUD-009 + AUD-016 (R9)</td><td>Full load-time validator (id/timestamp/result/tokens/512-token cap/<code>slice(0,50)</code> + one cleaning write); <code>loadResultOnly()</code> public state method; validate inside <code>loadFromHistory()</code></td><td>A: boundary validator + public method (rec.) · B: validator only · C: key versioning <code>v2</code></td><td>Legacy malformed rows get dropped once</td><td>Fake-localStorage matrix tests; manual corrupt-string reload</td></tr>
+<tr><td>AUD-010 (R10)</td><td>Signature dedupe (<code>lastHistorySignature</code> reset by non-equals actions); render history only if open; DocumentFragment batching</td><td>A: signature + lazy render + fragment (rec.) · B: <code>repeat</code> flag from evaluate · C: idle-callback deferred writes</td><td>Ensure drawer re-renders on open (hamburger already re-renders — keep); toasts preserved</td><td>State idempotency tests; render-count stub; timing probe of 50 rapid <code>=</code></td></tr>
+<tr><td>AUD-011 (R11)</td><td>Core/optional precache split (<code>Promise.allSettled</code> for icons); explicit 504 Response offline fallback; scoped <code>cache.match</code>; Node integrity test</td><td>A: core/optional split (rec.) · B: network-first navigations · C: stale-while-revalidate</td><td>SW behavior changes require iOS offline revalidation</td><td><code>tests/pwa.test.js</code>; DevTools Application trace; rename-icon simulation; airplane-mode nav</td></tr>
+<tr><td>AUD-012 (R12)</td><td>Reload only when waiting/installing; await activated via <code>statechange</code>/<code>controllerchange</code>; "Already up to date" toast; optional sessionStorage state persist/restore</td><td>A: detect-then-reload + toast (rec.) · B: reload + session persist · C: none</td><td>Scope guard must keep targeting only the Calculator registration</td><td>Manual: no-update tap, stale-update tap, expression-survival check, scope isolation</td></tr>
+<tr><td>AUD-013 (R13)</td><td>Add <code>test</code> job (<code>node --test tests/*.test.js</code>), <code>deploy.needs: test</code>, stage only <code>_site/</code> shell; optional SHA pinning</td><td>A: test gate + staging (rec.) · B: test step in one job (weaker)</td><td>Staging list maintenance; small CI time cost</td><td>CI logs; post-deploy URL probes (internal files 404, shell 200)</td></tr>
+<tr><td>AUD-014 (R14)</td><td>Unify <code>toggleSign()</code> on power terms with <code>inputPower()</code>'s intent (wrap/unwrap <code>(−base)^exp</code>)</td><td>A: negate base (rec.) · B: negate whole term <code>−(5^2)</code> · C: negate exponent only (surprising)</td><td>Documented ambiguity resolution changes; tests for <code>5^2 +/-</code>, <code>(-5)^2</code>, double-toggle</td><td>Sign matrix tests; manual on-screen paren check</td></tr>
+<tr><td>AUD-015 (R15)</td><td>README §7/§8/§14.5/§14.6 alignment with implemented behavior; remove missing-file row; doc-example tests</td><td>Docs follow code decisions from R4/R12/R14 (single source of truth)</td><td>Doc-only; version-sync rule applies on release</td><td>Doc diff review; grep missing file; behavior-example tests</td></tr>
+<tr><td>AUD-017 (R16)</td><td>Remove dead entries/exports/args; merge paren-enclosure helpers into <code>formatUtils</code></td><td>Do in one cleanup commit with R17</td><td>Test-only references (<code>pasteNumber</code>) must update in same commit</td><td>Full suite + private-usage grep guard</td></tr>
+<tr><td>AUD-018 (R17)</td><td>Prioritized new tests: fidelity, state invariants/property, paste matrix, keyboard dispatch, loadHistory validation, static PWA checks, view-model extraction; delete 5 duplicated test pairs</td><td>See file impact (tests/parser/state/inputController/storage + new tests/pwa.test.js)</td><td>Low (tests + optional module extraction)</td><td>Suite green with added coverage; version-sync static test</td></tr>
+<tr><td>AUD-019/020/022/023 (R18)</td><td>CI grep for <code>innerHTML|eval(|new Function(</code>; keep meta CSP (headers when hosting changes); keep localStorage disclosure; optional session-only history mode</td><td>Preserve invariants; hardening is defense-in-depth</td><td>~none</td><td>CI job output; README diff</td></tr>
+<tr><td>NEW-002 (R19)</td><td><code>evaluate()</code> on a copy; commit auto-close only on success</td><td>Bundle with R4 (same file)</td><td>~none</td><td>Division-by-zero probe test</td></tr>
+<tr><td>NEW-003 (R20)</td><td>Batch layout reads/writes in <code>renderDisplay</code>; throttle resize with rAF</td><td>Can defer to a perf pass</td><td>Measurement order changes; visual parity check needed</td><td>Performance recording; forced-sync-layout count per frame</td></tr>
+<tr><td>NEW-004</td><td><code>manifest.json</code> → <code>"orientation": "any"</code> (or drop landscape CSS)</td><td>Maintainer decision</td><td>Low</td><td>Manifest probe; landscape spot-check on device</td></tr>
+<tr><td>NEW-006</td><td><code>storage</code> listener + <code>HistoryManager.reload()</code> merge-by-id</td><td>Minimal reconciliation now; full merge policy later if needed</td><td>Low</td><td>Two-tab manual test</td></tr>
+</table>
+
+<h2>File Impact Analysis</h2>
+<table>
+<tr><th>File</th><th>Issues served</th><th>Planned changes</th><th>Risk</th></tr>
+<tr><td><code>js/expressionParser.js</code></td><td>AUD-001, AUD-021</td><td>15-significant-digit <code>formatNumber</code>; <code>toExponential(14)</code>; exported <code>validateSyntax()</code>; policy constants</td><td>Medium</td></tr>
+<tr><td><code>js/calculatorState.js</code></td><td>AUD-002/003/004/014/016/021, NEW-001, NEW-002</td><td><code>_recomputeExponentMode()</code>; <code>_ensureImplicitMultiplicationBeforeValue()</code>; paste combine rewrite + reason codes; Unicode dash/separator normalization; operator-closes-exponent (decision-gated); sign-on-power semantics; evaluate copy-then-commit; <code>loadResultOnly()</code>; <code>loadFromHistory</code> validation</td><td>Medium</td></tr>
+<tr><td><code>js/inputController.js</code></td><td>AUD-006, AUD-017</td><td>Enter/Space early return on focused buttons; drop unused args</td><td>Low</td></tr>
+<tr><td><code>js/app.js</code></td><td>AUD-005/008/010/016, NEW-006, R12</td><td>Narrow/remove touchmove; onEvaluate dedupe + render-if-open; <code>loadResultOnly</code> in legacy path; display-line keyboard wiring; <code>storage</code> listener; optional session persist</td><td>Medium</td></tr>
+<tr><td><code>js/uiRenderer.js</code></td><td>AUD-007/008/010/017, NEW-003, NEW-005</td><td>Ddrawer <code>inert</code> + focus restore + overlay aria sync; clipboard menu focus-in/out; DocumentFragment; read/write batching; delete <code>showCopyToast</code>; unexport <code>SELECTORS</code></td><td>Medium</td></tr>
+<tr><td><code>css/style.css</code></td><td>AUD-007, NEW-005</td><td>Panels <code>visibility</code> fallback with transition delay; (optional) overlay affordance styles</td><td>Low</td></tr>
+<tr><td><code>service-worker.js</code></td><td>AUD-011</td><td>Core/optional precache split; 504 fallback; scoped matching</td><td>Medium</td></tr>
+<tr><td><code>js/pwaBootstrap.js</code></td><td>AUD-012</td><td>Consentful update (reload only on waiting/activated; up-to-date toast; restore badge text)</td><td>Low</td></tr>
+<tr><td><code>js/storageManager.js</code></td><td>AUD-009</td><td>Full validator + cap + one-time cleaning write</td><td>Low</td></tr>
+<tr><td><code>js/historyManager.js</code></td><td>NEW-006</td><td><code>reload()</code> for multi-tab merge</td><td>Low</td></tr>
+<tr><td><code>manifest.json</code></td><td>NEW-004</td><td><code>"orientation": "any"</code> (decision-gated)</td><td>Low</td></tr>
+<tr><td><code>index.html</code></td><td>AUD-008</td><td>Display-line roles/tabindex/aria</td><td>Low</td></tr>
+<tr><td><code>.github/workflows/deploy.yml</code></td><td>AUD-013</td><td><code>test</code> job + <code>needs</code>; <code>_site/</code> staging; integrity step</td><td>Low</td></tr>
+<tr><td><code>tests/parser.test.js</code></td><td>AUD-001, AUD-021</td><td>Precision fidelity + syntax-validation tests</td><td>Low</td></tr>
+<tr><td><code>tests/state.test.js</code></td><td>AUD-002/003/004/014, NEW-001/002</td><td>Exponent recovery/exit matrix, paste combine matrix, sign-on-power, invariant loop; remove 5 duplicated pairs</td><td>Low</td></tr>
+<tr><td><code>tests/inputController.test.js</code></td><td>AUD-006</td><td>Focused-button Enter/Space regression</td><td>Low</td></tr>
+<tr><td><code>tests/storage.test.js</code></td><td>AUD-009</td><td>Load validation/cap/corrupt-JSON matrix</td><td>Low</td></tr>
+<tr><td><code>tests/pwa.test.js</code> (new)</td><td>AUD-011/013, AUD-018</td><td>Precache-vs-disk, manifest icons, version sync</td><td>Low</td></tr>
+<tr><td><code>README.md</code></td><td>AUD-015, R4/R12/R14 docs</td><td>§7/§8/§14 alignment; update-flow; ambiguity log</td><td>Low</td></tr>
+<tr><td><code>AGENTS.md</code></td><td>Release hygiene</td><td>Current-release note after each fix batch</td><td>Low</td></tr>
+</table>
+
+<h2>Recommended Implementation Order</h2>
+<h3>Priority 1 — Critical (wrong answers)</h3>
+<ol>
+  <li><strong>R1 (AUD-001)</strong> — numeric fidelity + regression tests.</li>
+  <li><strong>R3 (AUD-003)</strong> — exponent recovery display divergence.</li>
+</ol>
+<h3>Priority 2 — High (silent correctness surprises)</h3>
+<ol start="3">
+  <li><strong>R4 (AUD-004 + NEW-001)</strong> — implicit multiplication centralization + exponent-exit decision.</li>
+  <li><strong>R2 (AUD-002)</strong> — paste combination semantics.</li>
+  <li><strong>R9 (AUD-009 + AUD-016)</strong> — history load hardening + encapsulation.</li>
+  <li><strong>R19 (NEW-002)</strong> — evaluate rollout to a copy (bundle with R4).</li>
+</ol>
+<h3>Priority 3 — Medium (accessibility & reliability)</h3>
+<ol start="7">
+  <li><strong>R5 (AUD-005)</strong> — touch veto removal (ride the promised iOS manual pass).</li>
+  <li><strong>R6 (AUD-006)</strong> — Enter/Space native activation.</li>
+  <li><strong>R7 (AUD-007 + NEW-005)</strong> — drawer inert/focus restore.</li>
+  <li><strong>R8 (AUD-008)</strong> — display-line keyboard access.</li>
+  <li><strong>R11 (AUD-011)</strong> — SW fail-soft install + offline fallback.</li>
+  <li><strong>R12 (AUD-012)</strong> — consentful update flow.</li>
+</ol>
+<h3>Priority 4 — Low (polish & hardening)</h3>
+<ol start="13">
+  <li><strong>R10 (AUD-010)</strong> — dedupe + lazy render + fragment.</li>
+  <li><strong>R14 (AUD-014)</strong> — sign-on-power decision.</li>
+  <li><strong>R13 (AUD-013)</strong> — CI gate + staged artifact.</li>
+  <li><strong>R15/R16/R17/R18/R20/R21</strong> — docs, dead code, test gaps, security greps, render batching, orientation, storage listener.</li>
+</ol>
+<p><strong>Suggested commit batches:</strong> A = R1+R3+R19 (correctness) · B = R4+R2+R14 (input semantics + README) · C = R5+R6+R7+R8 (a11y) · D = R11+R12+R13 (PWA/CI) · E = rest (hygiene).</p>
+
+<h2>Risks and Assumptions</h2>
+<ul>
+  <li><strong>Runtime equivalence:</strong> validated against the current working tree, assumed identical to the audit's HEAD <code>808ac42</code> (file set and line numbers matched).</li>
+  <li><strong>Browser-dependent claims</strong> (pinch-zoom, tab order, native activation, PWA update flows) rest on code plus standard DOM/spec behavior exactly as the audit disclosed — real-device validation is still required, especially iPhone Safari/installed PWA (AGENTS.md already flags this pass for v7.11).</li>
+  <li><strong>Four behavior-spec decisions need maintainer sign-off before Batch B:</strong> (1) operators closing exponent mode (R4, intentionally changes documented §14.6 behavior); (2) sign-on-power target semantics (R14); (3) paste combination policy (R2: insert <code>×</code> vs replace); (4) manifest orientation (<code>any</code> vs portrait lock).</li>
+  <li><strong>toPrecision(15) verification:</strong> the audit's positive results for 15-digit preservation and float-noise cleanup were not re-executed here beyond the noise cases; run the probe before merging R1.</li>
+  <li><strong>inert support matrix</strong> (Safari 15.5+, Chrome 102+, Firefox 112+): confirm against target devices; the CSS visibility fallback covers gaps.</li>
+  <li><strong>AUD-011 is latent:</strong> all 20 precache entries exist today (verified), so no current offline harm — the fix is prophylactic but cheap.</li>
+  <li><strong>Shared-origin localStorage</strong> (AUD-020) cannot be fully solved in code on github.io; mitigation = disclosure + validation + optional session-only mode.</li>
+  <li><strong>Architecture refactors</strong> proposed by the audit (view-model extraction, shared token serializer, numeric-policy module) are enablers for R17 and are intentionally optional, not scheduled remediation.</li>
+  <li><strong>Deploy staging</strong> (R13) assumes GitHub Pages remains the host; <code>reports/</code> (this file and <code>audit.md</code>) should not be committed to the public artifact.</li>
+</ul>
+
+</main>
+</body>
+</html>

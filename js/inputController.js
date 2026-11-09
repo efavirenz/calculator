@@ -40,7 +40,7 @@ for (let d = 0; d <= 9; d += 1) {
 /**
  * @property {import('./calculatorState.js').CalculatorState} state
  * @property {(action?: string) => void} onChange
- * @property {(tokens: Array<object>, result: string, before: string) => void} onEvaluate
+ * @property {(tokens: Array<object>) => void} onEvaluate
  * @property {() => boolean} isDialogOpen
  * @property {() => boolean} isHistoryOpen
  * @property {() => boolean} handleEscape
@@ -50,7 +50,7 @@ export class InputController {
    * @param {object} params
    * @param {import('./calculatorState.js').CalculatorState} params.state
    * @param {(action?: string) => void} params.onChange - called after every mutating action
-   * @param {(tokens: Array<object>, result: string, before: string) => void} params.onEvaluate - called on successful '='
+   * @param {(tokens: Array<object>) => void} params.onEvaluate - called on successful '='
    * @param {() => boolean} [params.isDialogOpen]
    * @param {() => boolean} [params.isHistoryOpen]
    * @param {() => boolean} [params.handleEscape]
@@ -60,7 +60,7 @@ export class InputController {
     this.state = state;
     /** @type {(action?: string) => void} */
     this.onChange = onChange;
-    /** @type {(tokens: Array<object>, result: string, before: string) => void} */
+    /** @type {(tokens: Array<object>) => void} */
     this.onEvaluate = onEvaluate;
     /** @type {() => boolean} */
     this.isDialogOpen = isDialogOpen;
@@ -120,10 +120,9 @@ export class InputController {
         state.clearAll();
         break;
       case 'equals': {
-        const before = state.rawExpression;
         const outcome = state.evaluate();
         if (outcome && outcome.success && this.onEvaluate) {
-          this.onEvaluate(outcome.expression, outcome.result, before);
+          this.onEvaluate(outcome.expression);
         }
         break;
       }
@@ -209,6 +208,15 @@ export class InputController {
       // Ignore keystrokes while focus is inside a text input/dialog control.
       if (event.target && event.target.closest && event.target.closest('input, textarea, dialog')) return;
       if (this.isDialogOpen()) return;
+
+      // Let native activation win when a control owns focus (AUD-006): Enter
+      // and Space must activate that button instead of the global shortcut.
+      if (
+        (event.key === 'Enter' || event.key === ' ') &&
+        event.target?.closest?.('button, [role="button"]')
+      ) {
+        return;
+      }
 
       if (event.key === 'Escape' && this.handleEscape()) {
         event.preventDefault();

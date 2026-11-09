@@ -3,7 +3,7 @@
  *
  * A dependency-free arithmetic expression parser and evaluator.
  * Supports: + - × ÷ ^ (right-associative), parentheses, decimals,
- * and unary negation. Never uses eval().
+ * and unary negation. Expression text is never executed as code.
  *
  * Pipeline: raw string -> lex() -> tokens -> toRPN() (Shunting Yard)
  * -> evaluateRPN() -> number
@@ -33,7 +33,16 @@ const PRECEDENCE = {
   '^': 4,
 };
 
-const RIGHT_ASSOCIATIVE = new Set(['^', 'u-']);
+// Only incoming operators are consulted here; 'u-' is produced directly by
+// the unary-context branch below and never arrives via comparePrecedence().
+const RIGHT_ASSOCIATIVE = new Set(['^']);
+
+/**
+ * Display/numeric policy: number of significant digits retained when a
+ * result is formatted. Must stay >= the 15-digit input acceptance limit in
+ * calculatorState.js so that pressing "=" never corrupts an accepted value.
+ */
+export const SIGNIFICANT_DIGITS = 15;
 
 /**
  * Converts a raw expression string into a flat array of lexical tokens.
@@ -245,8 +254,46 @@ export function evaluateRPN(rpn) {
 }
 
 /**
- * Cleans up floating point noise (e.g. 0.1 + 0.2 !== 0.30000000000004)
- * and formats a number for display.
+ * Validates that an expression is syntactically well-formed without
+ * computing a value. Unlike evaluateExpression(), this accepts expressions
+ * that are structurally valid but would fail at evaluation time (division by
+ * zero, non-finite overflow, etc.). Used by the paste pipeline so syntax
+ * validation is not conflated with a successful calculation.
+ * @param {string} expressionString
+ * @returns {boolean} always true; throws ExpressionError when invalid
+ */
+export function validateSyntax(expressionString) {
+  if (!expressionString || expressionString.trim() === '') {
+    throw new ExpressionError('Empty expression');
+  }
+  const tokens = lex(expressionString);
+  if (tokens.length === 0) {
+    throw new ExpressionError('Empty expression');
+  }
+  const rpn = toRPN(tokens);
+
+  // Structural arity check: simulate the RPN stack depth without evaluating.
+  let depth = 0;
+  for (const token of rpn) {
+    if (token.type === 'number') {
+      depth += 1;
+    } else if (token.type === 'operator') {
+      const arity = token.value === 'u-' ? 1 : 2;
+      if (depth < arity) throw new ExpressionError('Invalid expression');
+      depth -= arity - 1;
+    }
+  }
+  if (depth !== 1) throw new ExpressionError('Invalid expression');
+  return true;
+}
+
+/**
+ * Cleans up floating point noise and formats a number for display.
+ *
+ * Precision policy: values are rounded to SIGNIFICANT_DIGITS (15)
+ * significant digits, which matches the 15-digit input acceptance policy in
+ * calculatorState.js. Keeping these limits aligned guarantees that an
+ * accepted integer is displayed and re-chained without corruption.
  * @param {number} value
  * @returns {string}
  */
@@ -255,9 +302,9 @@ export function formatNumber(value) {
     throw new ExpressionError('Result is not a finite number');
   }
 
-  // Round to 12 significant digits to eliminate float noise, then
+  // Round to the display precision to eliminate float noise, then
   // strip trailing zeros / trailing decimal point.
-  let rounded = parseFloat(value.toPrecision(12));
+  let rounded = parseFloat(value.toPrecision(SIGNIFICANT_DIGITS));
 
   // Guard against -0.
   if (Object.is(rounded, -0)) rounded = 0;
@@ -266,7 +313,7 @@ export function formatNumber(value) {
   // matching typical calculator behavior.
   const abs = Math.abs(rounded);
   if (rounded !== 0 && (abs >= 1e15 || abs < 1e-9)) {
-    return rounded.toExponential(11).replace(/(?:\.0+|(?:(\.[0-9]*?)0+))e/, '$1e');
+    return rounded.toExponential(SIGNIFICANT_DIGITS - 1).replace(/(?:\.0+|(?:(\.[0-9]*?)0+))e/, '$1e');
   }
 
   return rounded.toString();

@@ -10,6 +10,7 @@
 import { CalculatorState, DisplayState } from './calculatorState.js';
 import { HistoryManager } from './historyManager.js';
 import { InputController } from './inputController.js';
+import { HISTORY_STORAGE_KEY } from './storageManager.js';
 import { tokensToPlainText, tokensToClipboardText } from './formatUtils.js';
 import {
   renderDisplay,
@@ -25,6 +26,14 @@ import {
   hideClipboardMenu,
 } from './uiRenderer.js';
 import { registerServiceWorker, setupInstallPrompt, setupForceUpdate } from './pwaBootstrap.js';
+
+const PASTE_ERROR_MESSAGES = {
+  empty: 'Nothing to paste',
+  invalid: 'Cannot paste expression',
+  'too-long': 'Number is too long to paste',
+  ambiguous: 'Ambiguous number format',
+  rejected: 'Cannot combine with current expression',
+};
 
 async function copyToClipboard(text) {
   try {
@@ -59,11 +68,19 @@ function main() {
   const historyPanel = document.getElementById('history-panel');
   const clipboardMenu = document.getElementById('clipboard-menu');
 
-  // Prevent iOS Safari overscroll rubber-banding except on scrollable elements (history list, display lines)
+  // The drawer starts closed; keep its controls out of the tab order and the
+  // accessibility tree before the first toggle (AUD-007).
+  if (historyPanel) historyPanel.inert = true;
+
+  // Prevent iOS Safari overscroll rubber-banding except on scrollable
+  // surfaces. Multi-touch (pinch-zoom) is never vetoed, and non-cancelable
+  // events are left alone (AUD-005).
   document.addEventListener(
     'touchmove',
     (event) => {
-      if (event.target?.closest('.history-list, .display-line')) {
+      if (!event.cancelable) return;
+      if (event.touches && event.touches.length > 1) return;
+      if (event.target?.closest?.('.history-list, .display-line, dialog')) {
         return;
       }
       event.preventDefault();
@@ -115,29 +132,54 @@ function main() {
     setSignButtonState(state.isSignEnabled);
   }
 
+  function addKeyboardActivation(el, onActivate) {
+    if (!el) return;
+    el.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      onActivate();
+    });
+  }
+
+  function isHistoryPanelOpen() {
+    return Boolean(historyPanel?.classList.contains('is-open'));
+  }
+
+  let lastHistorySignature = null;
+
   const controller = new InputController({
     state,
     isDialogOpen: () => Boolean(confirmDialog?.open),
-    isHistoryOpen: () => Boolean(historyPanel?.classList.contains('is-open')),
+    isHistoryOpen: () => isHistoryPanelOpen(),
     handleEscape: () => {
       if (confirmDialog?.open) return false; // Native dialog owns its Escape behavior.
-      if (historyPanel?.classList.contains('is-open')) {
+      if (isHistoryPanelOpen()) {
         toggleHistoryPanel(false);
         return true;
       }
       if (clipboardMenu && !clipboardMenu.hidden) {
-        hideClipboardMenu();
+        hideClipboardMenu({ restoreFocus: true });
         return true;
       }
       return false;
     },
-    onChange: () => render(),
+    onChange: (action) => {
+      // Any non-equals mutation invalidates the "same calculation" signature.
+      if (action !== 'equals') lastHistorySignature = null;
+      render();
+    },
     onEvaluate: (tokens) => {
       const expressionText = tokensToPlainText(tokens);
-      history.add(tokens, expressionText, state.resultString);
-      renderHistory(history.getAll(), handleHistorySelect);
-      if (history.lastSaveWasTrimmed) showToast('Older history removed to free storage');
-      else if (history.lastSaveFailed) showToast('History could not be saved; browser storage is full');
+      const signature = `${expressionText}|${state.resultString}`;
+      if (signature !== lastHistorySignature) {
+        history.add(tokens, expressionText, state.resultString);
+        // Allow a retry when persistence failed and the entry was dropped.
+        lastHistorySignature = history.lastSaveFailed ? null : signature;
+        if (history.lastSaveWasTrimmed) showToast('Older history removed to free storage');
+        else if (history.lastSaveFailed) showToast('History could not be saved; browser storage is full');
+      }
+      // The drawer already re-renders when opened, so only refresh it when visible.
+      if (isHistoryPanelOpen()) renderHistory(history.getAll(), handleHistorySelect);
     },
   });
 
@@ -147,9 +189,7 @@ function main() {
     if (Array.isArray(entry.tokens) && entry.tokens.length > 0) {
       state.loadFromHistory(entry.tokens, entry.result);
     } else {
-      state.clearAll();
-      state.tokens = state._tokensFromString(entry.result);
-      state.displayState = DisplayState.ENTRY;
+      state.loadResultOnly(entry.result);
     }
     render();
     toggleHistoryPanel(false);
@@ -164,10 +204,17 @@ function main() {
     state.recallExpressionToEntry();
     render();
   });
+  addKeyboardActivation(upperDisplayEl, () => {
+    state.recallExpressionToEntry();
+    render();
+  });
 
   // Tap lower display to open Copy / Paste context menu
   const lowerDisplayEl = document.getElementById('lower-display');
   addSwipeSafeClickListener(lowerDisplayEl, () => {
+    showClipboardMenu();
+  });
+  addKeyboardActivation(lowerDisplayEl, () => {
     showClipboardMenu();
   });
 
@@ -177,7 +224,7 @@ function main() {
       if (!item) return;
 
       const action = item.dataset.clipboard;
-      hideClipboardMenu();
+      hideClipboardMenu({ restoreFocus: true });
 
       if (action === 'copy') {
         let textToCopy = '';
@@ -197,11 +244,12 @@ function main() {
         try {
           if (navigator.clipboard && navigator.clipboard.readText) {
             const text = await navigator.clipboard.readText();
-            if (state.pasteExpression(text)) {
+            const outcome = state.pasteExpressionWithReason(text);
+            if (outcome.success) {
               render();
               showToast('Pasted');
             } else {
-              showToast('Nothing to paste');
+              showToast(PASTE_ERROR_MESSAGES[outcome.reason] || 'Nothing to paste');
             }
           } else {
             showToast('Paste not supported');
@@ -246,22 +294,41 @@ function main() {
     confirmDialog.close ? confirmDialog.close() : confirmDialog.removeAttribute('open');
   });
 
+  // Cross-tab reconciliation (NEW-006): another tab wrote the shared history
+  // key, so re-read the validated list instead of overwriting its entries on
+  // the next save.
+  window.addEventListener('storage', (event) => {
+    if (event.key !== HISTORY_STORAGE_KEY) return;
+    history.reload();
+    if (isHistoryPanelOpen()) renderHistory(history.getAll(), handleHistorySelect);
+  });
+
   registerServiceWorker();
   setupInstallPrompt(document.getElementById('install-btn'));
   setupForceUpdate(document.getElementById('version-badge'));
 
-  // Re-render on orientation or window size change so font sizes recalculate immediately
+  // Re-render on orientation or window size change so font sizes recalculate
+  // immediately. Coalesce bursts (resize drags) into one frame (NEW-003).
+  let resizeFrame = null;
+  const scheduleRender = () => {
+    if (resizeFrame !== null) return;
+    const requestFrame = typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => window.setTimeout(callback, 16);
+    resizeFrame = requestFrame(() => {
+      resizeFrame = null;
+      render();
+    });
+  };
+
   const orientationMq = window.matchMedia('(orientation: landscape)');
   if (orientationMq.addEventListener) {
-    orientationMq.addEventListener('change', () => render());
+    orientationMq.addEventListener('change', scheduleRender);
   } else if (orientationMq.addListener) {
-    orientationMq.addListener(() => render());
+    orientationMq.addListener(scheduleRender);
   }
-  window.addEventListener('resize', () => render());
-  window.addEventListener('orientationchange', () => {
-    render();
-    setTimeout(render, 60);
-  });
+  window.addEventListener('resize', scheduleRender);
+  window.addEventListener('orientationchange', scheduleRender);
 
   render();
 }

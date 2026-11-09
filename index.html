@@ -41,18 +41,31 @@
       </button>
       <div class="topbar-actions">
         <button id="install-btn" class="install-button" type="button" hidden>Install</button>
-        <button id="version-badge" class="version-badge" type="button" title="Tap to check for updates">v7.11</button>
+        <button id="version-badge" class="version-badge" type="button" title="Tap to check for updates">v7.12</button>
       </div>
     </header>
 
     <section class="display" aria-live="polite">
-      <div id="upper-display" class="display-line display-upper" aria-label="Expression"></div>
-      <div id="lower-display" class="display-line display-lower" aria-label="Current value">0</div>
+      <div
+        id="upper-display"
+        class="display-line display-upper"
+        role="button"
+        tabindex="0"
+        aria-label="Expression; activate to resume editing"
+      ></div>
+      <div
+        id="lower-display"
+        class="display-line display-lower"
+        role="button"
+        tabindex="0"
+        aria-label="Current value; activate to open clipboard actions"
+        aria-controls="clipboard-menu"
+      >0</div>
     </section>
 
-    <div id="clipboard-menu" class="clipboard-menu" role="menu" aria-label="Clipboard actions" hidden>
-      <button class="clipboard-menu-item" data-clipboard="copy" role="menuitem" type="button">Copy</button>
-      <button class="clipboard-menu-item" data-clipboard="paste" role="menuitem" type="button">Paste</button>
+    <div id="clipboard-menu" class="clipboard-menu" role="group" aria-label="Clipboard actions" hidden>
+      <button class="clipboard-menu-item" data-clipboard="copy" type="button">Copy</button>
+      <button class="clipboard-menu-item" data-clipboard="paste" type="button">Paste</button>
     </div>
 
     <div id="copy-toast" class="copy-toast" aria-live="polite" aria-atomic="true"></div>
@@ -102,7 +115,7 @@
   </div>
 
   <!-- History side panel -->
-  <div id="history-overlay" class="history-overlay" aria-hidden="true"></div>
+  <div id="history-overlay" class="history-overlay"></div>
   <aside id="history-panel" class="history-panel" aria-hidden="true" aria-label="Calculation history">
     <div class="history-header">
       <h2>History</h2>

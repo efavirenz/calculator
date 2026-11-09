@@ -14,9 +14,9 @@ node_modules/
 # Icon generation environment (script is source; keep the PNG output)
 __pycache__/
 
-_NoGit
-
 AGENTS.md
 
 # Serena local project state and memories
 .serena/
+
+_NoGit

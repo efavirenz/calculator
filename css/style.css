@@ -185,6 +185,16 @@ button {
   height: 0;
 }
 
+.display-line:focus {
+  outline: none;
+}
+
+.display-line:focus-visible {
+  outline: 2px solid var(--color-operator-bg);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 .display-upper {
   --display-max-font: 34px;
   --display-min-font: 18px;
@@ -334,7 +344,10 @@ button {
   width: min(340px, 86vw);
   background: #1c1c1e;
   transform: translateX(-105%);
-  transition: transform 0.25s ease;
+  /* `inert` is the primary hide; the visibility fallback also removes the
+     off-screen drawer from the accessibility tree on older engines (AUD-007). */
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
   z-index: 11;
   display: flex;
   flex-direction: column;
@@ -346,6 +359,8 @@ button {
 
 .history-panel.is-open {
   transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.25s ease, visibility 0s linear 0s;
 }
 
 .history-header {

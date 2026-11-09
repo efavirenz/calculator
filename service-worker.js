@@ -10,13 +10,13 @@
  * caches, so returning users won't get stuck on stale assets.
  */
 
-const CACHE_VERSION = 'v7.11';
+const CACHE_VERSION = 'v7.12';
 const CACHE_NAME = `calculator-cache-${CACHE_VERSION}`;
 
-const PRECACHE_URLS = [
+// App-shell files: install fails hard if any of these are unavailable.
+const CORE_URLS = [
   './',
   './index.html',
-  './manifest.json',
   './css/style.css',
   './js/app.js',
   './js/calculatorState.js',
@@ -27,6 +27,12 @@ const PRECACHE_URLS = [
   './js/pwaBootstrap.js',
   './js/storageManager.js',
   './js/uiRenderer.js',
+];
+
+// Non-essential assets: a missing icon/manifest must not block the install
+// (AUD-011). Successful entries are still cached for offline use.
+const OPTIONAL_URLS = [
+  './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-192.png',
@@ -38,10 +44,11 @@ const PRECACHE_URLS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await cache.addAll(CORE_URLS);
+      await Promise.allSettled(OPTIONAL_URLS.map((url) => cache.add(url)));
+      await self.skipWaiting();
+    })
   );
 });
 
@@ -69,24 +76,37 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    (async () => {
+      // Match only within this app's cache so sibling apps cannot influence it.
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(event.request);
       if (cached) return cached;
 
-      return fetch(event.request)
-        .then(async (response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
-            const clone = response.clone();
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(event.request, clone);
-          }
-          return response;
-        })
-        .catch(() => {
-          if (event.request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-          return undefined;
+      try {
+        const response = await fetch(event.request);
+        if (response && response.status === 200 && response.type === 'basic') {
+          await cache.put(event.request, response.clone());
+        }
+        return response;
+      } catch {
+        if (event.request.mode === 'navigate') {
+          const shell = await cache.match('./index.html');
+          if (shell) return shell;
+        }
+        return new Response('Offline', {
+          status: 504,
+          statusText: 'Offline',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         });
-    })
+      }
+    })()
   );
+});
+
+// Allows the page to ask a waiting worker to activate immediately (used by the
+// consentful update flow in pwaBootstrap.js).
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

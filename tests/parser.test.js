@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lex, toRPN, evaluateRPN, evaluateExpression, ExpressionError, formatNumber } from '../js/expressionParser.js';
+import { lex, toRPN, evaluateRPN, evaluateExpression, ExpressionError, formatNumber, validateSyntax, SIGNIFICANT_DIGITS } from '../js/expressionParser.js';
 
 test('lexing basic mathematical expression', () => {
   const tokens = lex('12 + 3.4 × 5');
@@ -87,9 +87,44 @@ test('Small exponent scientific evaluation (TEST-001)', () => {
   const result = evaluateExpression('10^-22');
   assert.equal(result, '1e-22');
 });
-test('Scientific notation preserves 12 significant digits and threshold formatting', () => {
+test('Scientific notation preserves significant digits and threshold formatting', () => {
   assert.equal(formatNumber(1.23456789012e20), '1.23456789012e+20');
   assert.equal(formatNumber(-1.23456789012e-20), '-1.23456789012e-20');
   assert.equal(formatNumber(1e15), '1e+15');
   assert.equal(formatNumber(1e-9), '1e-9');
+});
+
+test('formatNumber preserves accepted 13-15 digit inputs (AUD-001)', () => {
+  assert.equal(SIGNIFICANT_DIGITS, 15);
+  assert.equal(formatNumber(999999999999999), '999999999999999');
+  assert.equal(formatNumber(123456789012345), '123456789012345');
+  assert.equal(evaluateExpression('1234567890123'), '1234567890123');
+  assert.equal(evaluateExpression('1234567890123+1'), '1234567890124');
+  assert.equal(evaluateExpression('1234567890120+1'), '1234567890121');
+  assert.equal(evaluateExpression('99999999999999.9'), '99999999999999.9');
+});
+
+test('formatNumber keeps floating-point noise cleanup at 15 digits', () => {
+  assert.equal(evaluateExpression('0.1+0.2'), '0.3');
+  assert.equal(evaluateExpression('0.1+0.7'), '0.8');
+  assert.equal(evaluateExpression('1.005×100'), '100.5');
+});
+
+test('formatNumber exponential thresholds remain consistent with 15 digits', () => {
+  assert.equal(formatNumber(1e14), '100000000000000');
+  assert.equal(formatNumber(1e15), '1e+15');
+  assert.equal(formatNumber(1e-9), '1e-9');
+  assert.equal(formatNumber(-1.234567890123456e-20), '-1.23456789012346e-20');
+});
+
+test('validateSyntax accepts grammatically valid expressions that fail evaluation (AUD-021)', () => {
+  for (const expression of ['1÷0', '10^400', '(-2)^0.5', '2^-3']) {
+    assert.equal(validateSyntax(expression), true, expression);
+  }
+});
+
+test('validateSyntax rejects malformed grammar', () => {
+  for (const expression of ['', '   ', '5+', '(5', '5+×3', '1.2.3', '5)']) {
+    assert.throws(() => validateSyntax(expression), ExpressionError, expression);
+  }
 });

@@ -51,6 +51,17 @@ export class HistoryManager {
     return this.entries.find((e) => e.id === id) || null;
   }
 
+  /**
+   * Re-reads and re-validates history from storage (e.g. after another tab
+   * writes the shared key). Keeps in-memory state consistent with the
+   * persisted list without discarding the other context's entries.
+   * @returns {Array<object>} the reloaded entries
+   */
+  reload() {
+    this.entries = loadHistory();
+    return this.entries;
+  }
+
   clear() {
     this.entries = [];
     this.lastSaveWasTrimmed = false;

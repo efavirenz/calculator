@@ -96,6 +96,7 @@ function renderTokensToFragment(tokens) {
 export function renderDisplay({ displayState, tokens, resultString, errorMessage }) {
   const upperEl = document.querySelector(SELECTORS.upperDisplay);
   const lowerEl = document.querySelector(SELECTORS.lowerDisplay);
+  if (!upperEl || !lowerEl) return;
 
   upperEl.textContent = '';
   upperEl.style.fontSize = '';
@@ -103,27 +104,25 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
 
   lowerEl.textContent = '';
   lowerEl.style.fontSize = '';
+  lowerEl.classList.toggle('is-error', Boolean(errorMessage));
+
+  const shrinkEls = [];
+  const scrollEls = [];
 
   if (errorMessage) {
     upperEl.style.display = '';
     upperEl.style.visibility = '';
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = errorMessage;
-    lowerEl.classList.add('is-error');
-    autoShrinkToFit(lowerEl);
-    autoShrinkToFit(upperEl);
-    scrollToDisplayEnd(upperEl);
-    scrollToDisplayEnd(lowerEl);
-    return;
-  }
-
-  lowerEl.classList.remove('is-error');
-
-  if (displayState === 'B') {
+    shrinkEls.push(lowerEl, upperEl);
+    scrollEls.push(upperEl, lowerEl);
+  } else if (displayState === 'B') {
     upperEl.style.display = '';
     upperEl.style.visibility = '';
     upperEl.appendChild(renderTokensToFragment(tokens));
     lowerEl.textContent = resultString !== null ? addThousandsSeparators(resultString) : '';
+    shrinkEls.push(lowerEl, upperEl);
+    scrollEls.push(lowerEl, upperEl);
   } else {
     const isLandscape = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(orientation: landscape)').matches;
     if (isLandscape) {
@@ -136,44 +135,93 @@ export function renderDisplay({ displayState, tokens, resultString, errorMessage
       upperEl.style.visibility = '';
     }
     lowerEl.appendChild(renderTokensToFragment(tokens.length ? tokens : [{ char: '0', kind: 'digit', isExponent: false, hidden: false }]));
+    shrinkEls.push(lowerEl);
+    scrollEls.push(lowerEl);
   }
 
-  autoShrinkToFit(lowerEl);
-  scrollToDisplayEnd(lowerEl);
-  if (displayState === 'B') {
-    autoShrinkToFit(upperEl);
-    scrollToDisplayEnd(upperEl);
-  }
+  // Batch the render phases: all writes above, then one measurement pass,
+  // then one write pass. This avoids interleaving layout reads with writes
+  // (NEW-003).
+  applyAutoShrink(shrinkEls);
+  scrollToDisplayEnd(scrollEls);
 }
 
 /**
- * Scrolls a display line horizontally to its end so the most recent
- * input is visible.
- * @param {HTMLElement|null} el
+ * Scrolls one or more display lines horizontally to their end so the most
+ * recent input is visible. Reads are batched before writes.
+ * @param {HTMLElement|Array<HTMLElement>|null} elOrEls
  */
-export function scrollToDisplayEnd(el) {
-  if (!el) return;
-  el.scrollLeft = el.scrollWidth;
+export function scrollToDisplayEnd(elOrEls) {
+  const els = (Array.isArray(elOrEls) ? elOrEls : [elOrEls]).filter(Boolean);
+  if (els.length === 0) return;
+
+  const widths = els.map((el) => el.scrollWidth);
+  els.forEach((el, i) => {
+    el.scrollLeft = widths[i];
+  });
+
   if (typeof requestAnimationFrame !== 'undefined') {
     requestAnimationFrame(() => {
-      el.scrollLeft = el.scrollWidth;
+      const latestWidths = els.map((el) => el.scrollWidth);
+      els.forEach((el, i) => {
+        el.scrollLeft = latestWidths[i];
+      });
     });
   }
 }
 
-/** Shrinks font-size on the display line if the content overflows its box. */
-function autoShrinkToFit(el) {
-  const upperEl = document.querySelector(SELECTORS.upperDisplay);
-  const isUpper = el === upperEl;
-  const maxFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-max-font')) || (isUpper ? 34 : 64);
-  const minFontPx = parseFloat(getComputedStyle(el).getPropertyValue('--display-min-font')) || (isUpper ? 18 : 26);
-  el.style.fontSize = `${maxFontPx}px`;
+const fontLimitCache = new Map();
 
-  if (el.scrollWidth > el.clientWidth) {
-    const ratio = el.clientWidth / el.scrollWidth;
-    const targetSize = Math.max(minFontPx, Math.floor(maxFontPx * ratio));
-    el.style.fontSize = `${targetSize}px`;
+/**
+ * Reads the display line's min/max font custom properties. Cached per
+ * element/orientation/height class so repeated keystrokes do not re-read
+ * computed styles.
+ * @param {HTMLElement} el
+ * @returns {{max: number, min: number}}
+ */
+function getFontLimits(el) {
+  const isUpper = el.id === 'upper-display';
+  let key = isUpper ? 'upper' : 'lower';
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    key += window.matchMedia('(orientation: landscape)').matches ? '|landscape' : '|portrait';
+    key += window.matchMedia('(max-height: 640px)').matches ? '|short' : '|tall';
   }
+  let limits = fontLimitCache.get(key);
+  if (!limits) {
+    const styles = getComputedStyle(el);
+    limits = {
+      max: parseFloat(styles.getPropertyValue('--display-max-font')) || (isUpper ? 34 : 64),
+      min: parseFloat(styles.getPropertyValue('--display-min-font')) || (isUpper ? 18 : 26),
+    };
+    fontLimitCache.set(key, limits);
+  }
+  return limits;
+}
+
+/**
+ * Shrinks font-size on display lines that overflow. All candidate elements are
+ * set to max size first, then measured together, then resized together.
+ * @param {Array<HTMLElement>} els
+ */
+function applyAutoShrink(els) {
+  const targets = els.filter(Boolean);
+  if (targets.length === 0) return;
+
+  const limits = targets.map((el) => getFontLimits(el));
+  targets.forEach((el, i) => {
+    el.style.fontSize = `${limits[i].max}px`;
+  });
+
+  const sizes = targets.map((el, i) => {
+    const clientWidth = el.clientWidth;
+    const scrollWidth = el.scrollWidth;
+    if (!clientWidth || scrollWidth <= clientWidth) return limits[i].max;
+    return Math.max(limits[i].min, Math.floor(limits[i].max * (clientWidth / scrollWidth)));
+  });
+
+  targets.forEach((el, i) => {
+    el.style.fontSize = `${sizes[i]}px`;
+  });
 }
 
 /**
@@ -229,49 +277,52 @@ export function setPowerButtonState(enabled, active) {
  */
 export function renderHistory(entries, onSelect) {
   const listEl = document.querySelector(SELECTORS.historyList);
-  listEl.replaceChildren();
+  if (!listEl) return;
+
+  const fragment = document.createDocumentFragment();
 
   if (entries.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'history-empty';
     empty.textContent = 'No calculations yet';
-    listEl.appendChild(empty);
-    return;
-  }
+    fragment.appendChild(empty);
+  } else {
+    for (const entry of entries) {
+      const item = document.createElement('li');
+      item.className = 'history-item';
+      item.setAttribute('role', 'button');
+      item.tabIndex = 0;
 
-  for (const entry of entries) {
-    const item = document.createElement('li');
-    item.className = 'history-item';
-    item.setAttribute('role', 'button');
-    item.tabIndex = 0;
-
-    const exprEl = document.createElement('div');
-    exprEl.className = 'history-expression';
-    if (Array.isArray(entry.tokens) && entry.tokens.length > 0) {
-      exprEl.appendChild(renderTokensToFragment(entry.tokens));
-    } else {
-      exprEl.textContent = formatExpressionWithCommas(entry.expression);
-    }
-
-    const resultEl = document.createElement('div');
-    resultEl.className = 'history-result';
-    resultEl.textContent = `= ${addThousandsSeparators(entry.result)}`;
-
-    const timeEl = document.createElement('div');
-    timeEl.className = 'history-timestamp';
-    timeEl.textContent = formatTimestamp(entry.timestamp);
-
-    item.append(exprEl, resultEl, timeEl);
-    item.addEventListener('click', () => onSelect(entry.id));
-    item.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onSelect(entry.id);
+      const exprEl = document.createElement('div');
+      exprEl.className = 'history-expression';
+      if (Array.isArray(entry.tokens) && entry.tokens.length > 0) {
+        exprEl.appendChild(renderTokensToFragment(entry.tokens));
+      } else {
+        exprEl.textContent = formatExpressionWithCommas(entry.expression);
       }
-    });
 
-    listEl.appendChild(item);
+      const resultEl = document.createElement('div');
+      resultEl.className = 'history-result';
+      resultEl.textContent = `= ${addThousandsSeparators(entry.result)}`;
+
+      const timeEl = document.createElement('div');
+      timeEl.className = 'history-timestamp';
+      timeEl.textContent = formatTimestamp(entry.timestamp);
+
+      item.append(exprEl, resultEl, timeEl);
+      item.addEventListener('click', () => onSelect(entry.id));
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(entry.id);
+        }
+      });
+
+      fragment.appendChild(item);
+    }
   }
+
+  listEl.replaceChildren(fragment);
 }
 
 function formatTimestamp(ms) {
@@ -288,18 +339,33 @@ export function toggleHistoryPanel(open) {
   const panel = document.querySelector(SELECTORS.historyPanel);
   const overlay = document.querySelector(SELECTORS.historyOverlay);
   const hamburgerBtn = document.getElementById('hamburger-btn');
+  const appEl = document.getElementById('app');
+  const wasOpen = panel ? panel.classList.contains('is-open') : false;
+
   if (panel) {
     panel.classList.toggle('is-open', open);
     panel.setAttribute('aria-hidden', String(!open));
+    // `inert` removes off-screen descendants from the tab order and the
+    // accessibility tree while retaining the slide animation (AUD-007).
+    panel.inert = !open;
   }
   if (overlay) {
+    // Decorative click-to-close surface; its interactive state follows the
+    // drawer. It is intentionally not aria-hidden (NEW-005).
     overlay.classList.toggle('is-open', open);
+  }
+  if (appEl) {
+    // While the drawer is open, make the background non-interactive and
+    // non-focusable so focus stays inside the drawer.
+    appEl.inert = Boolean(open);
   }
   if (hamburgerBtn) {
     hamburgerBtn.setAttribute('aria-expanded', String(open));
   }
   if (open && panel) {
     panel.querySelector('.history-close')?.focus();
+  } else if (!open && wasOpen && hamburgerBtn) {
+    hamburgerBtn.focus();
   }
 }
 
@@ -330,14 +396,9 @@ export function showToast(message = 'Copied') {
   }, 1500);
 }
 
-/** Shows temporary 'Copied' floating notification toast. (Alias for showToast) */
-export function showCopyToast() {
-  showToast('Copied');
-}
-
 let menuDismissHandler = null;
 
-/** Shows the clipboard context menu. */
+/** Shows the clipboard context menu and moves focus into it. */
 export function showClipboardMenu() {
   const menu = document.querySelector(SELECTORS.clipboardMenu);
   if (!menu) return;
@@ -358,10 +419,17 @@ export function showClipboardMenu() {
   setTimeout(() => {
     document.addEventListener('pointerdown', menuDismissHandler);
   }, 0);
+
+  menu.querySelector('.clipboard-menu-item')?.focus();
 }
 
-/** Hides the clipboard context menu. */
-export function hideClipboardMenu() {
+/**
+ * Hides the clipboard context menu.
+ * @param {object} [options]
+ * @param {boolean} [options.restoreFocus=false] - return focus to the lower
+ *   display line (keyboard/Escape/menu-action dismissal paths).
+ */
+export function hideClipboardMenu({ restoreFocus = false } = {}) {
   const menu = document.querySelector(SELECTORS.clipboardMenu);
   if (!menu) return;
 
@@ -376,7 +444,9 @@ export function hideClipboardMenu() {
     document.removeEventListener('pointerdown', menuDismissHandler);
     menuDismissHandler = null;
   }
-}
 
-export { SELECTORS };
+  if (restoreFocus) {
+    document.querySelector(SELECTORS.lowerDisplay)?.focus();
+  }
+}
 

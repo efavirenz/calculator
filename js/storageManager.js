@@ -7,10 +7,44 @@
  * for IndexedDB).
  */
 
+import { isValidToken } from './formatUtils.js';
+
 const HISTORY_KEY = 'calculator.history.v1';
+export const HISTORY_STORAGE_KEY = HISTORY_KEY;
+
+const MAX_HISTORY_ITEMS = 50;
+const MAX_TOKENS_PER_ENTRY = 512;
 
 /**
- * @returns {Array<object>} stored history entries, newest first.
+ * Validates one persisted history entry at the storage trust boundary.
+ * Entries may omit tokens (legacy result-only records) but, when present,
+ * every token and the per-entry token count must be valid.
+ * @param {unknown} entry
+ * @returns {boolean}
+ */
+function isValidHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  if (typeof entry.id !== 'string' || entry.id === '') return false;
+  if (typeof entry.timestamp !== 'number' || !Number.isFinite(entry.timestamp)) return false;
+  if (typeof entry.expression !== 'string') return false;
+  if (
+    typeof entry.result !== 'string' ||
+    entry.result.trim() === '' ||
+    !Number.isFinite(Number(entry.result))
+  ) {
+    return false;
+  }
+  if ('tokens' in entry) {
+    if (!Array.isArray(entry.tokens)) return false;
+    if (entry.tokens.length > MAX_TOKENS_PER_ENTRY) return false;
+    if (!entry.tokens.every(isValidToken)) return false;
+  }
+  return true;
+}
+
+/**
+ * @returns {Array<object>} validated history entries, newest first,
+ * capped at the same 50-item limit enforced on write.
  */
 export function loadHistory() {
   try {
@@ -18,16 +52,7 @@ export function loadHistory() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (entry) =>
-        entry &&
-        typeof entry === 'object' &&
-        typeof entry.expression === 'string' &&
-        typeof entry.result === 'string' &&
-        (!('tokens' in entry) || (Array.isArray(entry.tokens) && entry.tokens.every(
-          (t) => t && typeof t === 'object' && typeof t.char === 'string' && typeof t.kind === 'string'
-        )))
-    );
+    return parsed.filter(isValidHistoryEntry).slice(0, MAX_HISTORY_ITEMS);
   } catch (err) {
     console.warn('Failed to load history from storage:', err);
     return [];
